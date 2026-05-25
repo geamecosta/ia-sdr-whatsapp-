@@ -34,14 +34,26 @@ export default function Dashboard() {
       if (!user) return
       try {
         setError(null)
+
+        const safeFetch = async (promise: Promise<any>, fallback: any) => {
+          try {
+            const result = await promise
+            return result !== undefined && result !== null ? result : fallback
+          } catch (e) {
+            console.error('Data fetch error:', e)
+            return fallback
+          }
+        }
+
         const [leadsData, logsData, configData] = await Promise.all([
-          db.getLeads(),
-          db.getLogs(),
-          db.getWhatsappConfig(user.id),
+          safeFetch(db.getLeads(), []),
+          safeFetch(db.getLogs(), []),
+          safeFetch(db.getWhatsappConfig(user.id), null),
         ])
+
         if (mounted) {
-          setLeads(leadsData)
-          setLogs(logsData.slice(0, 5))
+          setLeads(Array.isArray(leadsData) ? leadsData : [])
+          setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : [])
           setWaConfig(configData)
         }
       } catch (err: any) {
@@ -60,9 +72,10 @@ export default function Dashboard() {
   }, [user])
 
   const stats = useMemo(() => {
-    const counts = { total: leads.length, novo: 0, emAtendimento: 0, convertido: 0, outros: 0 }
-    leads.forEach((l) => {
-      const s = l.status?.toLowerCase() || ''
+    const safeLeads = Array.isArray(leads) ? leads : []
+    const counts = { total: safeLeads.length, novo: 0, emAtendimento: 0, convertido: 0, outros: 0 }
+    safeLeads.forEach((l) => {
+      const s = l?.status?.toLowerCase() || ''
       if (s.includes('novo')) counts.novo++
       else if (s.includes('atendimento')) counts.emAtendimento++
       else if (s.includes('convertido')) counts.convertido++
@@ -92,7 +105,7 @@ export default function Dashboard() {
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 animate-fade-in-up duration-500">
         <AlertTriangle className="h-12 w-12 text-destructive" />
         <h2 className="text-2xl font-semibold">Algo deu errado</h2>
-        <p className="text-muted-foreground">{error}</p>
+        <p className="text-muted-foreground text-center max-w-md">{error}</p>
         <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
       </div>
     )
@@ -198,7 +211,7 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-3">
-            {logs.length > 0 ? (
+            {Array.isArray(logs) && logs.length > 0 ? (
               logs.map((log) => (
                 <Card key={log.id} className="overflow-hidden">
                   <div className="flex items-start p-4 gap-4">

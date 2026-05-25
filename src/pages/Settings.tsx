@@ -49,14 +49,24 @@ export default function Settings() {
   const [isMfaLoading, setIsMfaLoading] = useState(false)
 
   useEffect(() => {
+    let mounted = true
     if (user) {
-      db.getCompanySettings(user.id).then((data) => {
-        if (data) setAiSettings(data)
-      })
-      db.getWhatsappConfig(user.id).then((data) => {
-        if (data) setWaSettings(data)
-      })
+      db.getCompanySettings(user.id)
+        .then((data) => {
+          if (mounted && data) setAiSettings(data)
+        })
+        .catch(console.error)
+
+      db.getWhatsappConfig(user.id)
+        .then((data) => {
+          if (mounted && data) setWaSettings(data)
+        })
+        .catch(console.error)
+
       loadMfaFactors()
+    }
+    return () => {
+      mounted = false
     }
   }, [user])
 

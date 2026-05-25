@@ -410,6 +410,9 @@ export const Constants = {
 //     USING: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
 // Table: profiles
+//   Policy "Users can update own profile" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = id)
+//     WITH CHECK: (auth.uid() = id)
 //   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = id)
 // Table: whatsapp_configs

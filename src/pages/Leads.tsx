@@ -19,10 +19,24 @@ export default function Leads() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    db.getLeads().then((data) => {
-      setLeads(data)
-      setLoading(false)
-    })
+    let mounted = true
+    db.getLeads()
+      .then((data) => {
+        if (mounted) {
+          setLeads(Array.isArray(data) ? data : [])
+          setLoading(false)
+        }
+      })
+      .catch((err) => {
+        console.error(err)
+        if (mounted) {
+          setLeads([])
+          setLoading(false)
+        }
+      })
+    return () => {
+      mounted = false
+    }
   }, [])
 
   return (
