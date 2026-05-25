@@ -73,14 +73,38 @@ Deno.serve(async (req) => {
         try {
           result = JSON.parse(text)
         } catch (e) {
-          throw new Error('Formato de resposta inválido ou credenciais incorretas.')
+          if (
+            response.status === 401 ||
+            response.status === 403 ||
+            text.toLowerCase().includes('unauthorized') ||
+            text.toLowerCase().includes('invalid')
+          ) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Credenciais Inválidas',
+                details: text.substring(0, 100),
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            )
+          }
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Falha na comunicação com a API do ChatGuru',
+              details: `Status ${response.status}: ${text.substring(0, 100)}`,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
         }
 
         if (result && result.error) {
-          return new Response(JSON.stringify({ success: false, error: result.error }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
+          let safeError = String(result.error)
+          if (web_api_key) safeError = safeError.split(web_api_key).join('***MASKED_KEY***')
+          return new Response(
+            JSON.stringify({ success: false, error: 'Credenciais Inválidas', details: safeError }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
         }
 
         let rawDevices: any[] = []
@@ -91,34 +115,52 @@ Deno.serve(async (req) => {
             rawDevices = result.phones
           } else if (result.devices && Array.isArray(result.devices)) {
             rawDevices = result.devices
+          } else if (result.data && Array.isArray(result.data)) {
+            rawDevices = result.data
           } else {
             const vals = Object.values(result)
-            if (
-              vals.length > 0 &&
-              typeof vals[0] === 'object' &&
-              vals[0] !== null &&
-              ('id' in (vals[0] as any) || 'phone_id' in (vals[0] as any))
-            ) {
-              rawDevices = vals
+            const objectVals = vals.filter(
+              (v) =>
+                typeof v === 'object' &&
+                v !== null &&
+                ('id' in (v as any) || 'phone_id' in (v as any) || 'instance_id' in (v as any)),
+            )
+            if (objectVals.length > 0) {
+              rawDevices = objectVals
             } else {
               rawDevices = [result]
             }
           }
         } else {
-          throw new Error('Formato inválido retornado pela API')
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Formato inválido retornado pela API',
+              details: JSON.stringify(result).substring(0, 100),
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
         }
 
         // Normalize output
-        devices = rawDevices.map((d: any) => ({
-          id: d.id || d.phone_id || d.instance_id || String(Math.random()),
-          name: d.name || d.phone_name || d.number || 'Aparelho Desconhecido',
-          status: d.status || 'unknown',
-        }))
+        devices = rawDevices
+          .map((d: any) => {
+            const deviceId = d.id || d.phone_id || d.instance_id || d.key
+            const deviceName =
+              d.name || d.phone_name || d.number || d.phone_number || 'Aparelho Desconhecido'
+            return {
+              id: String(deviceId),
+              name: String(deviceName),
+              status: d.status || 'unknown',
+              raw: d,
+            }
+          })
+          .filter((d: any) => d.id && d.id !== 'undefined' && d.id !== 'null')
       } catch (e: any) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'Falha ao buscar aparelhos na API do ChatGuru. Verifique suas credenciais.',
+            error: 'Falha ao buscar aparelhos na API do ChatGuru.',
             details: e.message,
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -133,7 +175,7 @@ Deno.serve(async (req) => {
     const configId = body.config_id
     let configQuery = supabase
       .from('whatsapp_configs')
-      .select('id, web_api_key, web_instance_id, verify_token')
+      .select('id, web_api_key, web_instance_id, verify_token, chatguru_account_id')
       .eq('user_id', user.id)
       .eq('connection_type', 'chatguru')
 
@@ -189,14 +231,23 @@ Deno.serve(async (req) => {
 
     let response
     try {
+      const payload: any = {
+        key,
+        webhook_url: webhookUrl,
+      }
+
+      if (phone_id) {
+        payload.phone_id = phone_id
+      }
+
+      if (config.chatguru_account_id) {
+        payload.account_id = config.chatguru_account_id
+      }
+
       response = await fetch(chatGuruUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          key,
-          webhook_url: webhookUrl,
-          phone_id: phone_id || undefined,
-        }),
+        body: JSON.stringify(payload),
       })
     } catch (e: any) {
       return new Response(

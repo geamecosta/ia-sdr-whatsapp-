@@ -562,7 +562,11 @@ async function sendWhatsAppMessage(
           details: { text: text },
         })
       } else {
-        const errData = await cgResponse.text()
+        let errData = await cgResponse.text()
+        // Mask API Key if it leaked in error
+        if (config.web_api_key) {
+          errData = errData.split(config.web_api_key).join('***MASKED_API_KEY***')
+        }
         await supabaseClient.from('execution_logs').insert({
           user_id: config.user_id,
           level: 'error',

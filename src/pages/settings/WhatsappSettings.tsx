@@ -93,12 +93,24 @@ export function WhatsappSettings() {
       const json = await res.json()
       if (json.success) {
         setFetchedDevices(json.devices || [])
-        toast({
-          title: 'Sucesso',
-          description: `${json.devices?.length || 0} aparelhos encontrados.`,
-        })
+        if (json.devices?.length === 0) {
+          toast({
+            title: 'Aviso',
+            description: 'Nenhum aparelho encontrado para esta conta.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Sucesso',
+            description: `${json.devices?.length || 0} aparelhos encontrados.`,
+          })
+        }
       } else {
-        throw new Error(json.error || 'Falha ao buscar aparelhos')
+        throw new Error(
+          json.details
+            ? `${json.error} (${json.details})`
+            : json.error || 'Falha ao buscar aparelhos',
+        )
       }
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' })
@@ -120,11 +132,19 @@ export function WhatsappSettings() {
     })
 
     if (error) {
-      toast({
-        title: 'Erro',
-        description: 'Aparelho já adicionado ou erro ao salvar.',
-        variant: 'destructive',
-      })
+      if (error.code === '23505') {
+        toast({
+          title: 'Aviso',
+          description: 'Este aparelho já está configurado na sua conta.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Erro',
+          description: 'Erro ao salvar configuração do aparelho.',
+          variant: 'destructive',
+        })
+      }
     } else {
       toast({ title: 'Sucesso', description: 'Aparelho adicionado com sucesso.' })
       fetchConfigs()
