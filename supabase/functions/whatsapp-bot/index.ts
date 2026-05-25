@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
         let configQuery = supabase
           .from('whatsapp_configs')
           .select(
-            'user_id, access_token, web_api_key, web_instance_id, connection_type, verify_token, chatguru_endpoint_url',
+            'id, user_id, access_token, web_api_key, web_instance_id, connection_type, verify_token, chatguru_endpoint_url, chatguru_account_id',
           )
         if (event.type === 'official') {
           configQuery = configQuery.eq('phone_number_id', event.phoneNumberId).single()
@@ -547,14 +547,38 @@ async function sendWhatsAppMessage(
       endpoint = endpoint.trim()
       if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://'))
         endpoint = 'https://' + endpoint
-      if (endpoint.endsWith('/')) endpoint = endpoint.slice(0, -1)
 
+      let parsedUrl
+      try {
+        parsedUrl = new URL(endpoint)
+        if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
+          parsedUrl.pathname = '/api/v1'
+        }
+      } catch (e) {
+        parsedUrl = new URL('https://chatguru.app/api/v1')
+      }
+
+      endpoint = parsedUrl.toString()
       const separator = endpoint.includes('?') ? '&' : '?'
+
+      const requestHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: config.web_api_key,
+        'X-API-KEY': config.web_api_key,
+        key: config.web_api_key,
+      }
+
+      if (config.chatguru_account_id) {
+        requestHeaders['X-ACCOUNT-ID'] = config.chatguru_account_id
+        requestHeaders['account'] = config.chatguru_account_id
+      }
+
       const cgResponse = await fetch(`${endpoint}${separator}action=send_message`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: requestHeaders,
         body: JSON.stringify({
           key: config.web_api_key,
+          account: config.chatguru_account_id,
           phone_id: config.web_instance_id,
           chat_id: to,
           text: text,

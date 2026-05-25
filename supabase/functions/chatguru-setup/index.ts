@@ -74,73 +74,65 @@ Deno.serve(async (req) => {
       let devices = []
       const normalizedEndpoint = normalizeUrl(chatguru_endpoint_url)
 
-      let baseListUrl = normalizedEndpoint
+      let parsedUrl
+      try {
+        parsedUrl = new URL(normalizedEndpoint)
+        if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
+          parsedUrl.pathname = '/api/v1'
+        }
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'URL do Endpoint mal formatada' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
+      }
+
+      let baseListUrl = parsedUrl.toString()
       if (
         !baseListUrl.includes('/devices') &&
         !baseListUrl.includes('/chats') &&
         !baseListUrl.includes('/phones') &&
         !baseListUrl.includes('action=')
       ) {
-        // Prioritize user URL, but append action=phones if no specific resource is defined
         const separator = baseListUrl.includes('?') ? '&' : '?'
         baseListUrl = `${baseListUrl}${separator}action=phones`
       }
 
       try {
-        // Attempt 1: POST with Headers
         let chatGuruUrl = baseListUrl
+
+        // AC: Redundant Authentication Payload (Headers + Body)
         let requestHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
           Accept: 'application/json',
+          key: web_api_key,
+          account: chatguru_account_id,
+          // Keep backwards compatibility headers
           Authorization: web_api_key,
           'X-API-KEY': web_api_key,
           'X-ACCOUNT-ID': chatguru_account_id,
         }
+
+        let requestBody = {
+          key: web_api_key,
+          account: chatguru_account_id,
+        }
+
+        // AC: Forced POST Communication Protocol
         let methodUsed = 'POST'
+
         let response = await fetch(chatGuruUrl, {
           method: methodUsed,
           headers: requestHeaders,
+          body: JSON.stringify(requestBody),
         })
+
         let text = await response.text()
         let statusCode = response.status
 
-        // If Attempt 1 fails, try Attempt 2: Query Parameters with POST
-        if (
-          statusCode >= 400 ||
-          (text && text.toLowerCase().includes('unauthorized')) ||
-          (text && text.toLowerCase().includes('invalid')) ||
-          (text && text.toLowerCase().includes('m\u00e9todo inv\u00e1lido'))
-        ) {
-          const separator = chatGuruUrl.includes('?') ? '&' : '?'
-          chatGuruUrl = `${chatGuruUrl}${separator}key=${web_api_key}&account=${chatguru_account_id}&account_id=${chatguru_account_id}`
-          requestHeaders = {
-            Accept: 'application/json',
-            Authorization: web_api_key,
-          }
-          methodUsed = 'POST'
-          response = await fetch(chatGuruUrl, {
-            method: methodUsed,
-            headers: requestHeaders,
-          })
-          text = await response.text()
-          statusCode = response.status
-
-          // If POST still fails, fallback to GET (some instances might need GET)
-          if (
-            statusCode >= 400 ||
-            (text && text.toLowerCase().includes('m\u00e9todo inv\u00e1lido'))
-          ) {
-            methodUsed = 'GET'
-            response = await fetch(chatGuruUrl, {
-              method: methodUsed,
-              headers: requestHeaders,
-            })
-            text = await response.text()
-            statusCode = response.status
-          }
-        }
-
         if (statusCode >= 400 || !response.ok) {
           const maskedUrl = chatGuruUrl.replace(web_api_key, '***MASKED_API_KEY***')
+          // AC: Enhanced Debugging and Logging
           await supabase.from('execution_logs').insert({
             user_id: user.id,
             level: 'error',
@@ -155,6 +147,7 @@ Deno.serve(async (req) => {
                 ...requestHeaders,
                 Authorization: '***MASKED***',
                 'X-API-KEY': '***MASKED***',
+                key: '***MASKED***',
               },
             },
           })
@@ -170,7 +163,7 @@ Deno.serve(async (req) => {
           if (serverDescription) {
             errorMsg = `Erro ${statusCode}: ${serverDescription}`
           } else if (statusCode === 404) {
-            errorMsg = 'URL do Endpoint inválida ou não suportada. (404 Not Found)'
+            errorMsg = `Endpoint não encontrado (404). Verifique a URL: ${chatGuruUrl}`
           } else if (
             statusCode === 401 ||
             statusCode === 403 ||
@@ -179,8 +172,9 @@ Deno.serve(async (req) => {
           ) {
             errorMsg = 'Credenciais inválidas: Verifique seu Account ID e API Key.'
           } else if (statusCode === 400) {
-            errorMsg = `URL do Endpoint inválida ou não suportada. (${text.substring(0, 50)})`
+            errorMsg = `Requisição inválida (400). Detalhes: ${serverDescription || text.substring(0, 100)}`
           }
+
           return new Response(JSON.stringify({ success: false, error: errorMsg, details: text }), {
             status: statusCode === 200 ? 400 : statusCode,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -238,7 +232,6 @@ Deno.serve(async (req) => {
             if (obj.phones && Array.isArray(obj.phones)) return obj.phones
             if (obj.devices && Array.isArray(obj.devices)) return obj.devices
 
-            // Find any top-level key that is an array of objects
             for (const key of Object.keys(obj)) {
               if (
                 Array.isArray(obj[key]) &&
@@ -249,7 +242,6 @@ Deno.serve(async (req) => {
               }
             }
 
-            // Fallback: extract objects that look like devices
             const vals = Object.values(obj)
             const objectVals = vals.filter(
               (v) =>
@@ -377,13 +369,22 @@ Deno.serve(async (req) => {
         .eq('id', config.id)
     }
 
-    // Construct Webhook URL
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}&token=${verifyToken}`
 
     const normalizedEndpoint = normalizeUrl(
       config.chatguru_endpoint_url || 'https://chatguru.app/api/v1',
     )
-    let chatGuruUrl = normalizedEndpoint
+    let parsedUrl
+    try {
+      parsedUrl = new URL(normalizedEndpoint)
+      if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
+        parsedUrl.pathname = '/api/v1'
+      }
+    } catch (e) {
+      parsedUrl = new URL('https://chatguru.app/api/v1')
+    }
+
+    let chatGuruUrl = parsedUrl.toString()
     if (!chatGuruUrl.includes('action=')) {
       const separator = chatGuruUrl.includes('?') ? '&' : '?'
       chatGuruUrl = `${chatGuruUrl}${separator}action=webhook_config`
@@ -394,9 +395,11 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
       Authorization: key,
       'X-API-KEY': key,
+      key: key,
     }
     if (config.chatguru_account_id) {
       requestHeaders['X-ACCOUNT-ID'] = config.chatguru_account_id
+      requestHeaders['account'] = config.chatguru_account_id
     }
 
     try {
@@ -411,6 +414,7 @@ Deno.serve(async (req) => {
 
       if (config.chatguru_account_id) {
         payload.account_id = config.chatguru_account_id
+        payload.account = config.chatguru_account_id
       }
 
       response = await fetch(chatGuruUrl, {

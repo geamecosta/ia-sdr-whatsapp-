@@ -140,9 +140,9 @@ export function WhatsappSettings() {
             errorMsg += ` (${json.details.substring(0, 100)})`
           }
         } else if (res.status === 401 || res.status === 403) {
-          errorMsg = 'Credenciais inválidas: Verifique seu Account ID e API Key.'
+          errorMsg = json.error || 'Credenciais inválidas: Verifique seu Account ID e API Key.'
         } else if (res.status === 400 || res.status === 404) {
-          errorMsg = 'URL do Endpoint inválida ou não suportada.'
+          errorMsg = json.error || 'URL do Endpoint inválida ou não suportada.'
         }
         throw new Error(errorMsg)
       }
