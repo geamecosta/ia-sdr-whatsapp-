@@ -1,0 +1,285 @@
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/services/db'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
+import { Bot, Phone } from 'lucide-react'
+
+export default function Settings() {
+  const { user } = useAuth()
+  const { toast } = useToast()
+
+  const [aiSettings, setAiSettings] = useState({
+    system_prompt: '',
+    sales_manual: '',
+    tone_of_voice: '',
+    company_objectives: '',
+  })
+  const [isSavingAi, setIsSavingAi] = useState(false)
+  const [testPrompt, setTestPrompt] = useState('')
+  const [testResult, setTestResult] = useState('')
+  const [isTesting, setIsTesting] = useState(false)
+
+  const [waSettings, setWaSettings] = useState({
+    phone_number_id: '',
+    access_token: '',
+    verify_token: '',
+  })
+  const [isSavingWa, setIsSavingWa] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      db.getCompanySettings(user.id).then((data) => {
+        if (data) setAiSettings(data)
+      })
+      db.getWhatsappConfig(user.id).then((data) => {
+        if (data) setWaSettings(data)
+      })
+    }
+  }, [user])
+
+  const handleSaveAi = async () => {
+    if (!user) return
+    setIsSavingAi(true)
+    try {
+      await db.updateCompanySettings(user.id, aiSettings)
+      toast({
+        title: 'Configurações salvas',
+        description: 'O perfil da IA foi atualizado com sucesso.',
+      })
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message })
+    }
+    setIsSavingAi(false)
+  }
+
+  const handleSaveWa = async () => {
+    if (!user) return
+    setIsSavingWa(true)
+    try {
+      await db.updateWhatsappConfig(user.id, waSettings)
+      toast({
+        title: 'Configurações salvas',
+        description: 'As credenciais do WhatsApp foram atualizadas.',
+      })
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message })
+    }
+    setIsSavingWa(false)
+  }
+
+  const handleTestAi = () => {
+    if (!testPrompt.trim()) return
+    setIsTesting(true)
+    setTimeout(() => {
+      setTestResult(
+        `[Simulação] Resposta gerada considerando o tom "${aiSettings.tone_of_voice || 'Padrão'}" e objetivo "${aiSettings.company_objectives || 'Vender'}": \n\n"Olá! Como posso ajudar com base na sua mensagem: '${testPrompt}'?"`,
+      )
+      setIsTesting(false)
+    }, 1500)
+  }
+
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://seu-projeto.supabase.co'}/functions/v1/whatsapp-bot`
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+        <p className="text-muted-foreground">
+          Gerencie o comportamento do seu SDR e a integração com WhatsApp.
+        </p>
+      </div>
+
+      <Tabs defaultValue="ai" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="ai" className="gap-2">
+            <Bot className="h-4 w-4" /> Persona da IA
+          </TabsTrigger>
+          <TabsTrigger value="wa" className="gap-2">
+            <Phone className="h-4 w-4" /> WhatsApp
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ai" className="space-y-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Comportamento e Tom</CardTitle>
+                  <CardDescription>Defina a personalidade do seu SDR.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Prompt do Sistema (System Prompt)</Label>
+                    <Textarea
+                      rows={4}
+                      placeholder="Você é um SDR especializado em..."
+                      value={aiSettings.system_prompt}
+                      onChange={(e) =>
+                        setAiSettings({ ...aiSettings, system_prompt: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tom de Voz</Label>
+                    <Input
+                      placeholder="Ex: Profissional, amigável, persuasivo..."
+                      value={aiSettings.tone_of_voice}
+                      onChange={(e) =>
+                        setAiSettings({ ...aiSettings, tone_of_voice: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Objetivo Principal</Label>
+                    <Input
+                      placeholder="Ex: Agendar uma reunião, qualificar o lead..."
+                      value={aiSettings.company_objectives}
+                      onChange={(e) =>
+                        setAiSettings({ ...aiSettings, company_objectives: e.target.value })
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Base de Conhecimento</CardTitle>
+                  <CardDescription>Informações sobre seus produtos ou serviços.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label>Manual de Vendas / FAQ</Label>
+                    <Textarea
+                      rows={8}
+                      placeholder="Cole aqui as informações essenciais sobre o seu negócio..."
+                      value={aiSettings.sales_manual}
+                      onChange={(e) =>
+                        setAiSettings({ ...aiSettings, sales_manual: e.target.value })
+                      }
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button onClick={handleSaveAi} disabled={isSavingAi} className="w-full">
+                    {isSavingAi ? 'Salvando...' : 'Salvar Configurações da IA'}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Testar Prompt</CardTitle>
+                  <CardDescription>Simule como a IA responderia a um lead.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Mensagem do Lead</Label>
+                    <Textarea
+                      placeholder="Escreva uma mensagem de teste..."
+                      value={testPrompt}
+                      onChange={(e) => setTestPrompt(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={handleTestAi}
+                    disabled={isTesting || !testPrompt}
+                  >
+                    {isTesting ? 'Gerando...' : 'Gerar Resposta'}
+                  </Button>
+
+                  {testResult && (
+                    <div className="mt-4 p-4 rounded-md bg-muted border whitespace-pre-wrap text-sm">
+                      {testResult}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="wa" className="space-y-6 mt-6">
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle>Credenciais do WhatsApp API</CardTitle>
+              <CardDescription>Configure a integração com o Meta Developer Portal.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Phone Number ID</Label>
+                  <Input
+                    placeholder="Ex: 104561234567890"
+                    value={waSettings.phone_number_id}
+                    onChange={(e) =>
+                      setWaSettings({ ...waSettings, phone_number_id: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Access Token (Permanente ou Temporário)</Label>
+                  <Input
+                    type="password"
+                    placeholder="EAAI..."
+                    value={waSettings.access_token}
+                    onChange={(e) => setWaSettings({ ...waSettings, access_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Verify Token (Crie um token único)</Label>
+                  <Input
+                    placeholder="Ex: meu_token_secreto_123"
+                    value={waSettings.verify_token}
+                    onChange={(e) => setWaSettings({ ...waSettings, verify_token: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Você precisará deste token ao configurar o Webhook no portal da Meta.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t space-y-4">
+                <h3 className="text-sm font-medium">Configuração do Webhook</h3>
+                <div className="p-4 rounded-md bg-muted border flex items-center justify-between gap-4">
+                  <code className="text-xs break-all flex-1">{webhookUrl}</code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(webhookUrl)
+                      toast({ description: 'URL copiada para a área de transferência.' })
+                    }}
+                  >
+                    Copiar
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleSaveWa} disabled={isSavingWa}>
+                {isSavingWa ? 'Salvando...' : 'Salvar Credenciais'}
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
