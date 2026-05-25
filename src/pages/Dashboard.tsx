@@ -211,24 +211,6 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Visão geral do consumo de IA e controle de cotas.</p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-6 items-start md:items-center justify-between p-4 bg-muted/30 rounded-lg border">
-          <div>
-            <h2 className="text-lg font-semibold">Bot Status & Diagnostic</h2>
-            <p className="text-sm text-muted-foreground">
-              Estado atual da sua conexão com o WhatsApp e IA.
-            </p>
-          </div>
-          <div
-            className={cn(
-              'flex items-center gap-2 px-3 py-1.5 rounded-full font-medium text-sm',
-              derivedBotStatusColor,
-            )}
-          >
-            {derivedBotStatusIcon}
-            {derivedBotStatus}
-          </div>
-        </div>
-
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -414,6 +396,24 @@ export default function Dashboard() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Visão geral do seu assistente virtual SDR.</p>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 mb-6 items-start md:items-center justify-between p-4 bg-muted/30 rounded-lg border">
+        <div>
+          <h2 className="text-lg font-semibold">Bot Status & Diagnostic</h2>
+          <p className="text-sm text-muted-foreground">
+            Estado atual da sua conexão com o WhatsApp e IA.
+          </p>
+        </div>
+        <div
+          className={cn(
+            'flex items-center gap-2 px-3 py-1.5 rounded-full font-medium text-sm',
+            derivedBotStatusColor,
+          )}
+        >
+          {derivedBotStatusIcon}
+          {derivedBotStatus}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
