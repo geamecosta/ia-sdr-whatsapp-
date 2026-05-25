@@ -56,7 +56,6 @@ Deno.serve(async (req) => {
 
                 if (!msgText) continue
 
-                // Log incoming message
                 await supabase.from('execution_logs').insert({
                   user_id: config.user_id,
                   level: 'info',
@@ -64,15 +63,18 @@ Deno.serve(async (req) => {
                   details: { text: msgText },
                 })
 
-                let { data: lead } = await supabase
+                // Securely upsert the lead handling concurrent webhook triggers
+                let leadId: string | null = null
+
+                const { data: existingLead } = await supabase
                   .from('leads')
                   .select('*')
                   .eq('user_id', config.user_id)
                   .eq('phone_number', fromPhone)
                   .single()
 
-                if (!lead) {
-                  const { data: newLead } = await supabase
+                if (!existingLead) {
+                  const { data: newLead, error: insertError } = await supabase
                     .from('leads')
                     .insert({
                       user_id: config.user_id,
@@ -82,38 +84,50 @@ Deno.serve(async (req) => {
                     })
                     .select()
                     .single()
-                  lead = newLead
+
+                  if (insertError && insertError.code === '23505') {
+                    // Unique constraint violation means another request created it just now
+                    const { data: recoveredLead } = await supabase
+                      .from('leads')
+                      .select('*')
+                      .eq('user_id', config.user_id)
+                      .eq('phone_number', fromPhone)
+                      .single()
+                    leadId = recoveredLead?.id
+                  } else {
+                    leadId = newLead?.id
+                  }
                 } else {
+                  leadId = existingLead.id
                   await supabase
                     .from('leads')
                     .update({ updated_at: new Date().toISOString() })
-                    .eq('id', lead.id)
+                    .eq('id', leadId)
                 }
 
+                if (!leadId) continue
+
                 await supabase.from('messages').insert({
-                  lead_id: lead.id,
+                  lead_id: leadId,
                   role: 'user',
                   content: msgText,
                 })
 
-                // Context retrieval for AI (Placeholder)
                 const { data: history } = await supabase
                   .from('messages')
                   .select('role, content')
-                  .eq('lead_id', lead.id)
+                  .eq('lead_id', leadId)
                   .order('created_at', { ascending: false })
                   .limit(10)
 
-                // MOCK AI RESPONSE logic based on settings
-                const aiResponseText = `Olá, ${senderName}! Recebemos: "${msgText}". [Isto é uma simulação do SDR Automático utilizando o tom "${settings?.tone_of_voice || 'Padrão'}"].`
+                const aiResponseText = `Olá, ${senderName}! Recebemos: "${msgText}". [Simulação SDR - Tom: "${settings?.tone_of_voice || 'Padrão'}"]`
 
                 await supabase.from('messages').insert({
-                  lead_id: lead.id,
+                  lead_id: leadId,
                   role: 'assistant',
                   content: aiResponseText,
                 })
 
-                // Send reply via WhatsApp API
                 const waResponse = await fetch(
                   `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`,
                   {

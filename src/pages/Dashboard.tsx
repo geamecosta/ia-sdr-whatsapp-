@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { db } from '@/services/db'
 import { useAuth } from '@/hooks/use-auth'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { supabase } from '@/lib/supabase/client'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Activity,
   Users,
@@ -14,11 +15,35 @@ import {
   Info,
   AlertTriangle,
   ShieldCheck,
+  TrendingUp,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { OnboardingModal } from '@/components/OnboardingModal'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Cell,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+} from 'recharts'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -27,60 +52,80 @@ export default function Dashboard() {
   const [leads, setLeads] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [waConfig, setWaConfig] = useState<any>(null)
+  const [metrics, setMetrics] = useState<{ leads: any[]; messages: any[] }>({
+    leads: [],
+    messages: [],
+  })
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  const loadData = useCallback(async () => {
+    if (!user) return
+    try {
+      setError(null)
+      const safeFetch = async (promise: Promise<any>, fallback: any) => {
+        try {
+          const result = await promise
+          return result !== undefined && result !== null ? result : fallback
+        } catch (e) {
+          console.error('Data fetch error:', e)
+          return fallback
+        }
+      }
+
+      const [leadsData, logsData, configData, settingsData, metricsData] = await Promise.all([
+        safeFetch(db.getLeads(), []),
+        safeFetch(db.getLogs(), []),
+        safeFetch(db.getWhatsappConfig(user.id), null),
+        safeFetch(db.getCompanySettings(user.id), null),
+        safeFetch(db.getMetrics(), { leads: [], messages: [] }),
+      ])
+
+      setLeads(Array.isArray(leadsData) ? leadsData : [])
+      setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : [])
+      setWaConfig(configData)
+      setMetrics(metricsData)
+
+      const isSettingsComplete =
+        settingsData?.company_objectives &&
+        settingsData?.sales_manual &&
+        settingsData?.tone_of_voice
+      if (!isSettingsComplete) {
+        setShowOnboarding(true)
+      }
+    } catch (err: any) {
+      console.error('Error loading dashboard data:', err)
+      setError(err.message || 'Erro ao carregar dados. Verifique sua conexão ou permissões.')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
 
   useEffect(() => {
     let mounted = true
-    async function loadData() {
-      if (!user) return
-      try {
-        setError(null)
-
-        const safeFetch = async (promise: Promise<any>, fallback: any) => {
-          try {
-            const result = await promise
-            return result !== undefined && result !== null ? result : fallback
-          } catch (e) {
-            console.error('Data fetch error:', e)
-            return fallback
-          }
-        }
-
-        const [leadsData, logsData, configData, settingsData, metricsData] = await Promise.all([
-          safeFetch(db.getLeads(), []),
-          safeFetch(db.getLogs(), []),
-          safeFetch(db.getWhatsappConfig(user.id), null),
-          safeFetch(db.getCompanySettings(user.id), null),
-          safeFetch(db.getMetrics(), { leads: [], messages: [] }),
-        ])
-
-        if (mounted) {
-          setLeads(Array.isArray(leadsData) ? leadsData : [])
-          setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : [])
-          setWaConfig(configData)
-          setMetrics(metricsData)
-
-          const isSettingsComplete =
-            settingsData?.company_objectives &&
-            settingsData?.sales_manual &&
-            settingsData?.tone_of_voice
-          if (!isSettingsComplete) {
-            setShowOnboarding(true)
-          }
-        }
-      } catch (err: any) {
-        console.error('Error loading dashboard data:', err)
-        if (mounted) {
-          setError(err.message || 'Erro ao carregar dados. Verifique sua conexão ou permissões.')
-        }
-      } finally {
-        if (mounted) setLoading(false)
-      }
+    if (mounted) {
+      loadData()
     }
-    loadData()
     return () => {
       mounted = false
     }
-  }, [user])
+  }, [loadData])
+
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres', { event: '*', schema: 'public', table: 'leads' }, () => {
+        loadData()
+      })
+      .on('postgres', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, loadData])
 
   const stats = useMemo(() => {
     const safeLeads = Array.isArray(leads) ? leads : []
@@ -95,7 +140,23 @@ export default function Dashboard() {
     return counts
   }, [leads])
 
+  const conversionRate =
+    stats.total > 0 ? ((stats.convertido / stats.total) * 100).toFixed(1) : '0.0'
+
   const isConfigured = Boolean(waConfig?.access_token && waConfig?.phone_number_id)
+
+  const leadsVolumeData = useMemo(() => {
+    const last14Days = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (13 - i))
+      return d.toISOString().split('T')[0]
+    })
+
+    return last14Days.map((date) => {
+      const count = metrics.leads.filter((l: any) => l.created_at?.startsWith(date)).length
+      return { date, count }
+    })
+  }, [metrics.leads])
 
   const messageChartData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -110,14 +171,14 @@ export default function Dashboard() {
       const received = dayMessages.filter((m: any) => m.role === 'user').length
       return { date, sent, received }
     })
-  }, [])
+  }, [metrics.messages])
 
   const leadsByStatusData = useMemo(
     () => [
-      { status: 'Novo', count: stats.novo, fill: 'var(--color-novo)' },
-      { status: 'Em Atendimento', count: stats.emAtendimento, fill: 'var(--color-emAtendimento)' },
-      { status: 'Convertido', count: stats.convertido, fill: 'var(--color-convertido)' },
-      { status: 'Outros', count: stats.outros, fill: 'var(--color-outros)' },
+      { status: 'Novo', count: stats.novo, fill: 'hsl(var(--chart-1))' },
+      { status: 'Em Atendimento', count: stats.emAtendimento, fill: 'hsl(var(--chart-2))' },
+      { status: 'Convertido', count: stats.convertido, fill: 'hsl(var(--chart-3))' },
+      { status: 'Outros', count: stats.outros, fill: 'hsl(var(--chart-4))' },
     ],
     [stats],
   )
@@ -201,12 +262,14 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Novos Leads</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.novo}</div>
-            <p className="text-xs text-muted-foreground mt-1">Aguardando interação</p>
+            <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+              {conversionRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Leads qualificados com sucesso</p>
           </CardContent>
         </Card>
 
@@ -225,14 +288,12 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Convertidos</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium">Novos Leads</CardTitle>
+            <Clock className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {stats.convertido}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Leads qualificados com sucesso</p>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.novo}</div>
+            <p className="text-xs text-muted-foreground mt-1">Aguardando interação</p>
           </CardContent>
         </Card>
       </div>
@@ -240,50 +301,27 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Status dos Leads</CardTitle>
+            <CardTitle>Volume de Leads (14 dias)</CardTitle>
+            <CardDescription>Crescimento da base de contatos</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={{
-                count: { label: 'Leads' },
-                novo: { color: 'hsl(var(--chart-1))' },
-                emAtendimento: { color: 'hsl(var(--chart-2))' },
-                convertido: { color: 'hsl(var(--chart-3))' },
-                outros: { color: 'hsl(var(--chart-4))' },
+                count: { label: 'Novos Leads', color: 'hsl(var(--chart-1))' },
               }}
               className="h-[300px]"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={leadsByStatusData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="status" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {leadsByStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Volume de Mensagens (Últimos 7 dias)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                sent: { label: 'Enviadas', color: 'hsl(var(--chart-1))' },
-                received: { label: 'Recebidas', color: 'hsl(var(--chart-2))' },
-              }}
-              className="h-[300px]"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={messageChartData}>
+                <AreaChart
+                  data={leadsVolumeData}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-count)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-count)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="date"
@@ -294,15 +332,54 @@ export default function Dashboard() {
                   />
                   <YAxis />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Line type="monotone" dataKey="sent" stroke="var(--color-sent)" strokeWidth={2} />
-                  <Line
+                  <Area
                     type="monotone"
-                    dataKey="received"
-                    stroke="var(--color-received)"
-                    strokeWidth={2}
+                    dataKey="count"
+                    stroke="var(--color-count)"
+                    fillOpacity={1}
+                    fill="url(#colorCount)"
                   />
-                </LineChart>
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Funil de Conversão</CardTitle>
+            <CardDescription>Distribuição de status dos leads</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center">
+            <ChartContainer
+              config={{
+                count: { label: 'Leads' },
+                Novo: { color: 'hsl(var(--chart-1))' },
+                'Em Atendimento': { color: 'hsl(var(--chart-2))' },
+                Convertido: { color: 'hsl(var(--chart-3))' },
+                Outros: { color: 'hsl(var(--chart-4))' },
+              }}
+              className="h-[300px] w-full"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie
+                    data={leadsByStatusData}
+                    dataKey="count"
+                    nameKey="status"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    label
+                  >
+                    {leadsByStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
               </ResponsiveContainer>
             </ChartContainer>
           </CardContent>
