@@ -165,6 +165,35 @@ Deno.serve(async (req) => {
             }
           }
         }
+      } else if (body.event === 'messages.upsert' || body.instance) {
+        const instanceId = body.instance
+        const msgData = body.data?.message
+        const fromMe = body.data?.key?.fromMe
+        const remoteJid = body.data?.key?.remoteJid
+
+        if (!fromMe && msgData && instanceId && remoteJid) {
+          const { data: config } = await supabase
+            .from('whatsapp_configs')
+            .select('user_id, web_api_key, connection_type')
+            .eq('web_instance_id', instanceId)
+            .eq('connection_type', 'web')
+            .single()
+
+          if (config) {
+            const senderName = body.data?.pushName || 'Desconhecido'
+            const msgText = msgData.conversation || msgData.extendedTextMessage?.text || ''
+            const fromPhone = remoteJid.replace('@s.whatsapp.net', '')
+
+            if (msgText) {
+              await supabase.from('execution_logs').insert({
+                user_id: config.user_id,
+                level: 'info',
+                message: `Mensagem recebida via Instância Web de ${senderName} (${fromPhone})`,
+                details: { text: msgText },
+              })
+            }
+          }
+        }
       }
       return new Response('OK', { status: 200 })
     } catch (error: any) {

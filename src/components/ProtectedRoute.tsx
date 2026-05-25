@@ -25,12 +25,16 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       try {
         const { data: configData } = await supabase
           .from('whatsapp_configs')
-          .select('id')
+          .select('id, connection_type, access_token, web_instance_id')
           .eq('user_id', user.id)
           .maybeSingle()
 
         if (mounted) {
-          setIsSetupComplete(!!configData)
+          const isValid =
+            !!configData &&
+            ((configData.connection_type === 'official' && !!configData.access_token) ||
+              (configData.connection_type === 'web' && !!configData.web_instance_id))
+          setIsSetupComplete(isValid)
           setCheckingSetup(false)
         }
       } catch (err) {

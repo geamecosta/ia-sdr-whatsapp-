@@ -18,6 +18,8 @@ import { useToast } from '@/hooks/use-toast'
 import { Bot, Phone, Shield } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { useNavigate } from 'react-router-dom'
 
 export default function Settings() {
   const { user } = useAuth()
@@ -34,10 +36,15 @@ export default function Settings() {
   const [testResult, setTestResult] = useState('')
   const [isTesting, setIsTesting] = useState(false)
 
+  const navigate = useNavigate()
+
   const [waSettings, setWaSettings] = useState({
+    connection_type: 'official',
     phone_number_id: '',
     access_token: '',
     verify_token: '',
+    web_instance_id: '',
+    web_api_key: '',
   })
   const [isSavingWa, setIsSavingWa] = useState(false)
 
@@ -59,7 +66,16 @@ export default function Settings() {
 
       db.getWhatsappConfig(user.id)
         .then((data) => {
-          if (mounted && data) setWaSettings(data)
+          if (mounted && data) {
+            setWaSettings({
+              connection_type: data.connection_type || 'official',
+              phone_number_id: data.phone_number_id || '',
+              access_token: data.access_token || '',
+              verify_token: data.verify_token || '',
+              web_instance_id: data.web_instance_id || '',
+              web_api_key: data.web_api_key || '',
+            })
+          }
         })
         .catch(console.error)
 
@@ -149,11 +165,22 @@ export default function Settings() {
     if (!user) return
     setIsSavingWa(true)
     try {
-      await db.updateWhatsappConfig(user.id, waSettings)
+      const payload = { ...waSettings }
+      if (payload.connection_type === 'official') {
+        payload.web_instance_id = ''
+        payload.web_api_key = ''
+      } else {
+        payload.phone_number_id = ''
+        payload.access_token = ''
+        payload.verify_token = ''
+      }
+
+      await db.updateWhatsappConfig(user.id, payload)
       toast({
         title: 'Configurações salvas',
         description: 'As credenciais do WhatsApp foram atualizadas.',
       })
+      navigate('/')
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message })
     }
@@ -305,37 +332,91 @@ export default function Settings() {
               <CardDescription>Configure a integração com o Meta Developer Portal.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Phone Number ID</Label>
-                  <Input
-                    placeholder="Ex: 104561234567890"
-                    value={waSettings.phone_number_id}
-                    onChange={(e) =>
-                      setWaSettings({ ...waSettings, phone_number_id: e.target.value })
-                    }
-                  />
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Tipo de Conexão</Label>
+                  <RadioGroup
+                    value={waSettings.connection_type}
+                    onValueChange={(v) => setWaSettings({ ...waSettings, connection_type: v })}
+                    className="flex flex-col space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="official" id="official" />
+                      <Label htmlFor="official" className="font-normal cursor-pointer">
+                        API Oficial
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="web" id="web" />
+                      <Label htmlFor="web" className="font-normal cursor-pointer">
+                        Instância Web
+                      </Label>
+                    </div>
+                  </RadioGroup>
                 </div>
-                <div className="space-y-2">
-                  <Label>Access Token (Permanente ou Temporário)</Label>
-                  <Input
-                    type="password"
-                    placeholder="EAAI..."
-                    value={waSettings.access_token}
-                    onChange={(e) => setWaSettings({ ...waSettings, access_token: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Verify Token (Crie um token único)</Label>
-                  <Input
-                    placeholder="Ex: meu_token_secreto_123"
-                    value={waSettings.verify_token}
-                    onChange={(e) => setWaSettings({ ...waSettings, verify_token: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Você precisará deste token ao configurar o Webhook no portal da Meta.
-                  </p>
-                </div>
+
+                {waSettings.connection_type === 'official' ? (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-2">
+                      <Label>Phone Number ID</Label>
+                      <Input
+                        placeholder="Ex: 104561234567890"
+                        value={waSettings.phone_number_id}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, phone_number_id: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Access Token</Label>
+                      <Input
+                        type="password"
+                        placeholder="EAAI..."
+                        value={waSettings.access_token}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, access_token: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Verify Token</Label>
+                      <Input
+                        placeholder="Ex: meu_token_secreto_123"
+                        value={waSettings.verify_token}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, verify_token: e.target.value })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Você precisará deste token ao configurar o Webhook no portal da Meta.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-2">
+                      <Label>Instance ID</Label>
+                      <Input
+                        placeholder="Ex: instance12345"
+                        value={waSettings.web_instance_id}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, web_instance_id: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>API Key</Label>
+                      <Input
+                        type="password"
+                        placeholder="Ex: chave_secreta..."
+                        value={waSettings.web_api_key}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, web_api_key: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t space-y-4">
