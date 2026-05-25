@@ -551,9 +551,6 @@ async function sendWhatsAppMessage(
       let parsedUrl
       try {
         parsedUrl = new URL(endpoint)
-        if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
-          parsedUrl.pathname = '/api/v1'
-        }
       } catch (e) {
         parsedUrl = new URL('https://chatguru.app/api/v1')
       }
@@ -571,6 +568,7 @@ async function sendWhatsAppMessage(
       if (config.chatguru_account_id) {
         requestHeaders['X-ACCOUNT-ID'] = config.chatguru_account_id
         requestHeaders['account'] = config.chatguru_account_id
+        requestHeaders['account_id'] = config.chatguru_account_id
       }
 
       const cgResponse = await fetch(`${endpoint}${separator}action=send_message`, {
@@ -579,6 +577,7 @@ async function sendWhatsAppMessage(
         body: JSON.stringify({
           key: config.web_api_key,
           account: config.chatguru_account_id,
+          account_id: config.chatguru_account_id,
           phone_id: config.web_instance_id,
           chat_id: to,
           text: text,

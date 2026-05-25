@@ -84,13 +84,6 @@ export function WhatsappSettings() {
       normalizedUrl = 'https://' + normalizedUrl
     }
     setCgEndpointUrl(normalizedUrl)
-
-    try {
-      new URL(normalizedUrl)
-    } catch {
-      toast({ title: 'Erro', description: 'URL da API inválida', variant: 'destructive' })
-      return
-    }
     setFetchingDevices(true)
     try {
       const {

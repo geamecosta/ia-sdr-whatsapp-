@@ -77,9 +77,6 @@ Deno.serve(async (req) => {
       let parsedUrl
       try {
         parsedUrl = new URL(normalizedEndpoint)
-        if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
-          parsedUrl.pathname = '/api/v1'
-        }
       } catch (e) {
         return new Response(
           JSON.stringify({ success: false, error: 'URL do Endpoint mal formatada' }),
@@ -106,6 +103,7 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
           Accept: 'application/json',
           key: web_api_key,
+          account_id: chatguru_account_id,
           account: chatguru_account_id,
           // Keep backwards compatibility headers
           Authorization: web_api_key,
@@ -115,6 +113,7 @@ Deno.serve(async (req) => {
 
         let requestBody = {
           key: web_api_key,
+          account_id: chatguru_account_id,
           account: chatguru_account_id,
         }
 
@@ -377,9 +376,6 @@ Deno.serve(async (req) => {
     let parsedUrl
     try {
       parsedUrl = new URL(normalizedEndpoint)
-      if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
-        parsedUrl.pathname = '/api/v1'
-      }
     } catch (e) {
       parsedUrl = new URL('https://chatguru.app/api/v1')
     }
@@ -400,6 +396,7 @@ Deno.serve(async (req) => {
     if (config.chatguru_account_id) {
       requestHeaders['X-ACCOUNT-ID'] = config.chatguru_account_id
       requestHeaders['account'] = config.chatguru_account_id
+      requestHeaders['account_id'] = config.chatguru_account_id
     }
 
     try {
