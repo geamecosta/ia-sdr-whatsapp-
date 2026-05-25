@@ -2,32 +2,77 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { useEffect, useState } from 'react'
 import { db } from '@/services/db'
+import { supabase } from '@/lib/supabase/client'
+import { Loader2 } from 'lucide-react'
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, mfaStatus } = useAuth()
+  const { user, loading: authLoading, mfaStatus } = useAuth()
   const location = useLocation()
   const [hasLoggedMfaFailure, setHasLoggedMfaFailure] = useState(false)
 
+  const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null)
+  const [checkingSetup, setCheckingSetup] = useState(true)
+
   useEffect(() => {
-    if (!loading && user) {
+    let mounted = true
+
+    async function checkSetup() {
+      if (!user) {
+        if (mounted) setCheckingSetup(false)
+        return
+      }
+
+      try {
+        const { data: configData } = await supabase
+          .from('whatsapp_configs')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (mounted) {
+          setIsSetupComplete(!!configData)
+          setCheckingSetup(false)
+        }
+      } catch (err) {
+        if (mounted) {
+          setIsSetupComplete(false)
+          setCheckingSetup(false)
+        }
+      }
+    }
+
+    if (!authLoading) {
+      checkSetup()
+    }
+
+    return () => {
+      mounted = false
+    }
+  }, [user, authLoading])
+
+  useEffect(() => {
+    if (!authLoading && user) {
       if (
-        mfaStatus.nextLevel === 'aal2' &&
-        mfaStatus.currentLevel === 'aal1' &&
+        mfaStatus?.nextLevel === 'aal2' &&
+        mfaStatus?.currentLevel === 'aal1' &&
         !hasLoggedMfaFailure
       ) {
-        db.addLog('error', 'Acesso Negado: MFA Requerido', {
-          event: 'mfa_required_access_denied',
-          path: location.pathname,
-        }).catch(() => {})
+        if (db && typeof db.addLog === 'function') {
+          db.addLog('error', 'Acesso Negado: MFA Requerido', {
+            event: 'mfa_required_access_denied',
+            path: location.pathname,
+          }).catch(() => {})
+        }
         setHasLoggedMfaFailure(true)
       }
     }
-  }, [loading, user, mfaStatus, location.pathname, hasLoggedMfaFailure])
+  }, [authLoading, user, mfaStatus, location.pathname, hasLoggedMfaFailure])
 
-  if (loading) {
+  if (authLoading || checkingSetup) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
       </div>
     )
   }
@@ -36,8 +81,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (mfaStatus.nextLevel === 'aal2' && mfaStatus.currentLevel === 'aal1') {
+  if (mfaStatus?.nextLevel === 'aal2' && mfaStatus?.currentLevel === 'aal1') {
     return <Navigate to="/mfa-verify" replace state={{ from: location }} />
+  }
+
+  if (isSetupComplete === false && location.pathname !== '/settings') {
+    return <Navigate to="/settings" replace state={{ from: location }} />
   }
 
   return <>{children}</>
