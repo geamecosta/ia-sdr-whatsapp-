@@ -20,13 +20,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { Save, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Save, Loader2, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
 
 export function WhatsappSettings() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [config, setConfig] = useState<any>({
     connection_type: 'official',
     status: 'disconnected',
@@ -85,8 +86,84 @@ export function WhatsappSettings() {
         description: 'Falha ao salvar as configurações.',
         variant: 'destructive',
       })
+      return false
     } else {
       toast({ title: 'Sucesso', description: 'Configurações do WhatsApp salvas com sucesso.' })
+      return true
+    }
+  }
+
+  const handleConnect = async () => {
+    if (!user) return
+    setConnecting(true)
+
+    try {
+      // Save config first to ensure we use the latest inputs
+      const { error: saveError } = await supabase
+        .from('whatsapp_configs')
+        .update({
+          connection_type: config.connection_type,
+          phone_number_id: config.phone_number_id,
+          access_token: config.access_token,
+          verify_token: config.verify_token,
+          web_api_key: config.web_api_key,
+          web_instance_id: config.web_instance_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+
+      if (saveError) throw new Error('Falha ao salvar as configurações antes de conectar.')
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) throw new Error('Sessão expirada')
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatguru-setup`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+
+      const text = await response.text()
+      let result
+      try {
+        result = JSON.parse(text)
+      } catch (e) {
+        result = null
+      }
+
+      if (response.ok && result?.success) {
+        setConfig((prev: any) => ({ ...prev, status: 'connected' }))
+        await supabase
+          .from('whatsapp_configs')
+          .update({ status: 'connected' })
+          .eq('user_id', user.id)
+        toast({
+          title: 'Sucesso',
+          description: result.message || 'Integração conectada com sucesso!',
+        })
+      } else {
+        toast({
+          title: 'Erro na Integração',
+          description:
+            result?.error || result?.details || 'Falha ao conectar. Verifique as credenciais.',
+          variant: 'destructive',
+        })
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Falha de comunicação com o servidor.',
+        variant: 'destructive',
+      })
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -191,8 +268,25 @@ export function WhatsappSettings() {
           </div>
         )}
       </CardContent>
-      <CardFooter className="bg-muted/30 border-t px-6 py-4 mt-2">
-        <Button onClick={handleSave} disabled={saving} className="ml-auto w-full sm:w-auto">
+      <CardFooter className="bg-muted/30 border-t px-6 py-4 mt-2 flex flex-col-reverse sm:flex-row justify-between gap-3">
+        {config.connection_type === 'chatguru' ? (
+          <Button
+            onClick={handleConnect}
+            disabled={connecting || saving || !config.web_api_key}
+            variant="outline"
+            className="w-full sm:w-auto border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          >
+            {connecting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="mr-2 h-4 w-4" />
+            )}
+            {connecting ? 'Conectando...' : 'Conectar Integração'}
+          </Button>
+        ) : (
+          <div />
+        )}
+        <Button onClick={handleSave} disabled={saving || connecting} className="w-full sm:w-auto">
           {saving ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
