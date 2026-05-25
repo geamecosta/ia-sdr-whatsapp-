@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PersonaSettings } from './settings/PersonaSettings'
 import { WhatsappSettings } from './settings/WhatsappSettings'
 import { SecuritySettings } from './settings/SecuritySettings'
+import { UsageSettings } from './settings/UsageSettings'
 
 export default function Settings() {
   return (
@@ -14,14 +15,17 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="persona" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 max-w-2xl h-11">
-          <TabsTrigger value="persona" className="h-9">
+        <TabsList className="flex flex-wrap w-full max-w-3xl h-auto gap-1 bg-muted p-1 rounded-md">
+          <TabsTrigger value="persona" className="flex-1 h-9 min-w-[120px]">
             PERSONA DA IA
           </TabsTrigger>
-          <TabsTrigger value="whatsapp" className="h-9">
+          <TabsTrigger value="whatsapp" className="flex-1 h-9 min-w-[120px]">
             WHATSAPP
           </TabsTrigger>
-          <TabsTrigger value="security" className="h-9">
+          <TabsTrigger value="usage" className="flex-1 h-9 min-w-[150px]">
+            USO E FATURAMENTO
+          </TabsTrigger>
+          <TabsTrigger value="security" className="flex-1 h-9 min-w-[120px]">
             SEGURANÇA
           </TabsTrigger>
         </TabsList>
@@ -32,6 +36,10 @@ export default function Settings() {
 
         <TabsContent value="whatsapp" className="outline-none focus:ring-0">
           <WhatsappSettings />
+        </TabsContent>
+
+        <TabsContent value="usage" className="outline-none focus:ring-0">
+          <UsageSettings />
         </TabsContent>
 
         <TabsContent value="security" className="outline-none focus:ring-0">

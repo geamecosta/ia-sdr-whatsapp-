@@ -239,7 +239,9 @@ Deno.serve(async (req) => {
         // Check token quota
         const { data: quota } = await supabase
           .from('usage_quotas')
-          .select('is_blocked, current_month_usage, monthly_token_limit')
+          .select(
+            'id, is_blocked, current_month_usage, monthly_token_limit, cost_per_1k_tokens, alert_80_sent_at',
+          )
           .eq('user_id', config.user_id)
           .single()
         if (quota && (quota.is_blocked || quota.current_month_usage >= quota.monthly_token_limit)) {
@@ -318,8 +320,9 @@ Deno.serve(async (req) => {
               const promptTokens = usage.prompt_tokens || 0
               const completionTokens = usage.completion_tokens || 0
               const totalTokens = usage.total_tokens || 0
-              const costEstimate =
-                (promptTokens / 1000000) * 0.15 + (completionTokens / 1000000) * 0.6
+              const costPer1k =
+                quota?.cost_per_1k_tokens !== undefined ? quota.cost_per_1k_tokens : 0.02
+              const costEstimate = (totalTokens / 1000) * costPer1k
 
               await supabase.from('usage_logs').insert({
                 user_id: config.user_id,
@@ -333,6 +336,44 @@ Deno.serve(async (req) => {
                 p_user_id: config.user_id,
                 p_tokens: totalTokens,
               })
+
+              if (quota && quota.monthly_token_limit > 0) {
+                const newUsage = quota.current_month_usage + totalTokens
+                const limit = quota.monthly_token_limit
+                const threshold = limit * 0.8
+
+                if (newUsage >= threshold) {
+                  let shouldAlert = false
+                  if (!quota.alert_80_sent_at) {
+                    shouldAlert = true
+                  } else {
+                    const lastAlertDate = new Date(quota.alert_80_sent_at)
+                    const now = new Date()
+                    if (
+                      lastAlertDate.getMonth() !== now.getMonth() ||
+                      lastAlertDate.getFullYear() !== now.getFullYear()
+                    ) {
+                      shouldAlert = true
+                    }
+                  }
+
+                  if (shouldAlert) {
+                    const warningMsg = 'Aviso: Você atingiu 80% da sua cota de mensagens deste mês.'
+                    await sendWhatsAppMessage(event, config, warningMsg, event.fromPhone, supabase)
+                    await supabase
+                      .from('usage_quotas')
+                      .update({ alert_80_sent_at: new Date().toISOString() })
+                      .eq('user_id', config.user_id)
+
+                    await supabase.from('execution_logs').insert({
+                      user_id: config.user_id,
+                      level: 'warning',
+                      message: 'Alerta de 80% de cota enviado via WhatsApp',
+                      details: { leadId, newUsage, threshold },
+                    })
+                  }
+                }
+              }
             }
           } else {
             aiResponseText = `Olá, ${event.senderName}! Recebemos: "${event.msgText}".\n\n[Aviso: Chave da OpenAI não configurada. Simulação Ativa]\nTom: "${settings?.tone_of_voice || 'Padrão'}"`

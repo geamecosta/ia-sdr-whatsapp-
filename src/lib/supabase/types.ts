@@ -145,16 +145,76 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          is_admin: boolean
         }
         Insert: {
           created_at?: string
           email: string
           id: string
+          is_admin?: boolean
         }
         Update: {
           created_at?: string
           email?: string
           id?: string
+          is_admin?: boolean
+        }
+        Relationships: []
+      }
+      usage_logs: {
+        Row: {
+          cost_estimate: number
+          created_at: string
+          id: string
+          tokens_completion: number
+          tokens_prompt: number
+          total_tokens: number
+          user_id: string
+        }
+        Insert: {
+          cost_estimate?: number
+          created_at?: string
+          id?: string
+          tokens_completion?: number
+          tokens_prompt?: number
+          total_tokens?: number
+          user_id: string
+        }
+        Update: {
+          cost_estimate?: number
+          created_at?: string
+          id?: string
+          tokens_completion?: number
+          tokens_prompt?: number
+          total_tokens?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage_quotas: {
+        Row: {
+          current_month_usage: number
+          id: string
+          is_blocked: boolean
+          last_reset_date: string
+          monthly_token_limit: number
+          user_id: string
+        }
+        Insert: {
+          current_month_usage?: number
+          id?: string
+          is_blocked?: boolean
+          last_reset_date?: string
+          monthly_token_limit?: number
+          user_id: string
+        }
+        Update: {
+          current_month_usage?: number
+          id?: string
+          is_blocked?: boolean
+          last_reset_date?: string
+          monthly_token_limit?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -208,7 +268,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_usage: {
+        Args: { p_tokens: number; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
@@ -387,6 +450,22 @@ export const Constants = {
 //   id: uuid (not null)
 //   email: text (not null)
 //   created_at: timestamp with time zone (not null, default: now())
+//   is_admin: boolean (not null, default: false)
+// Table: usage_logs
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   tokens_prompt: integer (not null, default: 0)
+//   tokens_completion: integer (not null, default: 0)
+//   total_tokens: integer (not null, default: 0)
+//   cost_estimate: numeric (not null, default: 0)
+//   created_at: timestamp with time zone (not null, default: now())
+// Table: usage_quotas
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   monthly_token_limit: integer (not null, default: 50000)
+//   current_month_usage: integer (not null, default: 0)
+//   is_blocked: boolean (not null, default: false)
+//   last_reset_date: timestamp with time zone (not null, default: now())
 // Table: whatsapp_configs
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -419,6 +498,13 @@ export const Constants = {
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
+// Table: usage_logs
+//   PRIMARY KEY usage_logs_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY usage_logs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+// Table: usage_quotas
+//   PRIMARY KEY usage_quotas_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY usage_quotas_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   UNIQUE usage_quotas_user_id_key: UNIQUE (user_id)
 // Table: whatsapp_configs
 //   PRIMARY KEY whatsapp_configs_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY whatsapp_configs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
@@ -442,11 +528,20 @@ export const Constants = {
 //     USING: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
 // Table: profiles
+//   Policy "Authenticated users can view all profiles" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: true
 //   Policy "Users can update own profile" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = id)
 //     WITH CHECK: (auth.uid() = id)
-//   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={authenticated}
-//     USING: (auth.uid() = id)
+// Table: usage_logs
+//   Policy "Users view own logs" (SELECT, PERMISSIVE) roles={public}
+//     USING: ((auth.uid() = user_id) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true)))))
+// Table: usage_quotas
+//   Policy "Admins can update quotas" (UPDATE, PERMISSIVE) roles={public}
+//     USING: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
+//     WITH CHECK: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
+//   Policy "Users view own quotas" (SELECT, PERMISSIVE) roles={public}
+//     USING: ((auth.uid() = user_id) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true)))))
 // Table: whatsapp_configs
 //   Policy "Users can manage own whatsapp_configs" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
@@ -460,10 +555,28 @@ export const Constants = {
 //    SECURITY DEFINER
 //   AS $function$
 //   BEGIN
-//     INSERT INTO public.profiles (id, email)
-//     VALUES (NEW.id, NEW.email)
+//     INSERT INTO public.profiles (id, email, is_admin)
+//     VALUES (NEW.id, NEW.email, false)
 //     ON CONFLICT (id) DO NOTHING;
+//
+//     INSERT INTO public.usage_quotas (user_id, monthly_token_limit, current_month_usage)
+//     VALUES (NEW.id, 50000, 0)
+//     ON CONFLICT (user_id) DO NOTHING;
+//
 //     RETURN NEW;
+//   END;
+//   $function$
+//
+// FUNCTION increment_usage(uuid, integer)
+//   CREATE OR REPLACE FUNCTION public.increment_usage(p_user_id uuid, p_tokens integer)
+//    RETURNS void
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   BEGIN
+//     UPDATE public.usage_quotas
+//     SET current_month_usage = current_month_usage + p_tokens
+//     WHERE user_id = p_user_id;
 //   END;
 //   $function$
 //
@@ -479,5 +592,7 @@ export const Constants = {
 //   CREATE UNIQUE INDEX leads_user_id_phone_number_key ON public.leads USING btree (user_id, phone_number)
 // Table: messages
 //   CREATE UNIQUE INDEX messages_provider_message_id_idx ON public.messages USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL)
+// Table: usage_quotas
+//   CREATE UNIQUE INDEX usage_quotas_user_id_key ON public.usage_quotas USING btree (user_id)
 // Table: whatsapp_configs
 //   CREATE UNIQUE INDEX whatsapp_configs_user_id_key ON public.whatsapp_configs USING btree (user_id)
