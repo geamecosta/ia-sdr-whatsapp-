@@ -41,8 +41,7 @@ export function WhatsappSettings() {
   const [cgAccountId, setCgAccountId] = useState('')
   const [cgApiKey, setCgApiKey] = useState('')
   const [cgEndpointUrl, setCgEndpointUrl] = useState('')
-  const [fetchingDevices, setFetchingDevices] = useState(false)
-  const [fetchedDevices, setFetchedDevices] = useState<any[]>([])
+  const [cgPhoneId, setCgPhoneId] = useState('')
 
   const [officialPhoneId, setOfficialPhoneId] = useState('')
   const [officialToken, setOfficialToken] = useState('')
@@ -69,97 +68,26 @@ export function WhatsappSettings() {
     fetchConfigs()
   }, [user])
 
-  const handleFetchChatGuruDevices = async () => {
-    if (!cgAccountId || !cgApiKey || !cgEndpointUrl) {
+  const handleSaveChatGuru = async () => {
+    if (!user) return
+    if (!cgAccountId || !cgApiKey || !cgEndpointUrl || !cgPhoneId) {
       toast({
         title: 'Erro',
-        description: 'Preencha Account ID, API Key e URL da API',
+        description: 'Preencha Account ID, API Key, URL da API e Phone ID',
         variant: 'destructive',
       })
       return
     }
-
-    let normalizedUrl = cgEndpointUrl.trim()
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      normalizedUrl = 'https://' + normalizedUrl
-    }
-    setCgEndpointUrl(normalizedUrl)
-    setFetchingDevices(true)
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatguru-setup`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'fetch_devices',
-          chatguru_account_id: cgAccountId,
-          web_api_key: cgApiKey,
-          chatguru_endpoint_url: cgEndpointUrl,
-        }),
-      })
-      const json = await res.json()
-      if (res.ok && json.success) {
-        setFetchedDevices(json.devices || [])
-        if (json.devices?.length === 0) {
-          toast({
-            title: 'Aviso',
-            description: 'Nenhum aparelho localizado nesta conta.',
-            variant: 'default',
-          })
-        } else {
-          toast({
-            title: 'Sucesso',
-            description: `${json.devices?.length || 0} aparelhos encontrados.`,
-          })
-        }
-      } else {
-        let errorMsg = json.error || 'Falha ao buscar aparelhos'
-        if (json.details && typeof json.details === 'string' && json.details.trim() !== '') {
-          try {
-            const parsed = JSON.parse(json.details)
-            if (parsed.description) {
-              errorMsg = `Erro: ${parsed.description}`
-            } else if (parsed.message) {
-              errorMsg = `Erro: ${parsed.message}`
-            } else {
-              errorMsg += ` (${json.details.substring(0, 100)})`
-            }
-          } catch {
-            errorMsg += ` (${json.details.substring(0, 100)})`
-          }
-        } else if (res.status === 401 || res.status === 403) {
-          errorMsg = json.error || 'Credenciais inválidas: Verifique seu Account ID e API Key.'
-        } else if (res.status === 400 || res.status === 404) {
-          errorMsg = json.error || 'URL do Endpoint inválida ou não suportada.'
-        }
-        throw new Error(errorMsg)
-      }
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
-    } finally {
-      setFetchingDevices(false)
-    }
-  }
-
-  const handleAddDevice = async (device: any) => {
-    if (!user) return
 
     const { data: existing } = await supabase
       .from('whatsapp_configs')
       .select('id')
       .eq('user_id', user.id)
       .eq('connection_type', 'chatguru')
-      .eq('web_instance_id', device.id)
+      .eq('web_instance_id', cgPhoneId)
       .maybeSingle()
 
-    const deviceStatus = device.status?.toLowerCase() === 'connected' ? 'connected' : 'disconnected'
     const now = new Date().toISOString()
-
     let saveError = null
 
     if (existing) {
@@ -168,8 +96,8 @@ export function WhatsappSettings() {
         .update({
           chatguru_account_id: cgAccountId,
           web_api_key: cgApiKey,
-          chatguru_endpoint_url: cgEndpointUrl,
-          status: deviceStatus,
+          chatguru_endpoint_url: cgEndpointUrl.trim(),
+          phone_number_id: cgPhoneId,
           last_heartbeat: now,
         })
         .eq('id', existing.id)
@@ -180,9 +108,10 @@ export function WhatsappSettings() {
         connection_type: 'chatguru',
         chatguru_account_id: cgAccountId,
         web_api_key: cgApiKey,
-        web_instance_id: device.id,
-        chatguru_endpoint_url: cgEndpointUrl,
-        status: deviceStatus,
+        web_instance_id: cgPhoneId,
+        phone_number_id: cgPhoneId,
+        chatguru_endpoint_url: cgEndpointUrl.trim(),
+        status: 'disconnected',
         last_heartbeat: now,
         verify_token: crypto.randomUUID(),
       } as any)
@@ -190,6 +119,12 @@ export function WhatsappSettings() {
     }
 
     if (saveError) {
+      await supabase.from('execution_logs').insert({
+        user_id: user.id,
+        level: 'error',
+        message: 'Erro ao salvar configuração manual do ChatGuru',
+        details: { error: saveError },
+      })
       toast({
         title: 'Erro',
         description: 'Erro ao salvar configuração do aparelho.',
@@ -203,6 +138,11 @@ export function WhatsappSettings() {
           : 'Aparelho adicionado com sucesso.',
       })
       fetchConfigs()
+      setIsAddOpen(false)
+      setCgPhoneId('')
+      setCgApiKey('')
+      setCgAccountId('')
+      setCgEndpointUrl('')
     }
   }
 
@@ -321,7 +261,7 @@ export function WhatsappSettings() {
                     <Input
                       value={cgEndpointUrl}
                       onChange={(e) => setCgEndpointUrl(e.target.value)}
-                      placeholder="https://s01.chatguru.io/api/v1"
+                      placeholder="https://s17.chatguru.app"
                     />
                   </div>
                   <div className="space-y-2">
@@ -341,41 +281,17 @@ export function WhatsappSettings() {
                       placeholder="Sua API Key"
                     />
                   </div>
-                  <Button
-                    onClick={handleFetchChatGuruDevices}
-                    disabled={fetchingDevices}
-                    variant="secondary"
-                    className="w-full"
-                  >
-                    {fetchingDevices ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Smartphone className="w-4 h-4 mr-2" />
-                    )}
-                    Buscar Aparelhos
+                  <div className="space-y-2">
+                    <Label>Phone ID (ID do Aparelho)</Label>
+                    <Input
+                      value={cgPhoneId}
+                      onChange={(e) => setCgPhoneId(e.target.value)}
+                      placeholder="ID do Aparelho no ChatGuru"
+                    />
+                  </div>
+                  <Button onClick={handleSaveChatGuru} className="w-full">
+                    Salvar Conexão
                   </Button>
-
-                  {fetchedDevices.length > 0 && (
-                    <div className="mt-4 space-y-3 border rounded-lg p-3 bg-muted/20 max-h-60 overflow-y-auto">
-                      <Label className="text-xs text-muted-foreground uppercase">
-                        Aparelhos Encontrados
-                      </Label>
-                      {fetchedDevices.map((d) => (
-                        <div
-                          key={d.id}
-                          className="flex items-center justify-between bg-background border p-2 rounded-md"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">{d.name}</p>
-                            <p className="text-xs text-muted-foreground">ID: {d.id}</p>
-                          </div>
-                          <Button size="sm" onClick={() => handleAddDevice(d)}>
-                            Adicionar
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
