@@ -103,7 +103,7 @@ export function WhatsappSettings() {
         }),
       })
       const json = await res.json()
-      if (json.success) {
+      if (res.ok && json.success) {
         setFetchedDevices(json.devices || [])
         if (json.devices?.length === 0) {
           toast({
@@ -118,11 +118,7 @@ export function WhatsappSettings() {
           })
         }
       } else {
-        throw new Error(
-          json.details
-            ? `${json.error} (${json.details})`
-            : json.error || 'Falha ao buscar aparelhos',
-        )
+        throw new Error(json.error || 'Falha ao buscar aparelhos')
       }
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' })
@@ -133,33 +129,60 @@ export function WhatsappSettings() {
 
   const handleAddDevice = async (device: any) => {
     if (!user) return
-    const { error } = await supabase.from('whatsapp_configs').insert({
-      user_id: user.id,
-      connection_type: 'chatguru',
-      chatguru_account_id: cgAccountId,
-      web_api_key: cgApiKey,
-      web_instance_id: device.id,
-      chatguru_endpoint_url: cgEndpointUrl,
-      status: 'disconnected',
-      verify_token: crypto.randomUUID(),
-    } as any)
 
-    if (error) {
-      if (error.code === '23505') {
-        toast({
-          title: 'Aviso',
-          description: 'Este aparelho já está configurado na sua conta.',
-          variant: 'default',
+    const { data: existing } = await supabase
+      .from('whatsapp_configs')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('connection_type', 'chatguru')
+      .eq('web_instance_id', device.id)
+      .maybeSingle()
+
+    const deviceStatus = device.status?.toLowerCase() === 'connected' ? 'connected' : 'disconnected'
+    const now = new Date().toISOString()
+
+    let saveError = null
+
+    if (existing) {
+      const { error } = await supabase
+        .from('whatsapp_configs')
+        .update({
+          chatguru_account_id: cgAccountId,
+          web_api_key: cgApiKey,
+          chatguru_endpoint_url: cgEndpointUrl,
+          status: deviceStatus,
+          last_heartbeat: now,
         })
-      } else {
-        toast({
-          title: 'Erro',
-          description: 'Erro ao salvar configuração do aparelho.',
-          variant: 'destructive',
-        })
-      }
+        .eq('id', existing.id)
+      saveError = error
     } else {
-      toast({ title: 'Sucesso', description: 'Aparelho adicionado com sucesso.' })
+      const { error } = await supabase.from('whatsapp_configs').insert({
+        user_id: user.id,
+        connection_type: 'chatguru',
+        chatguru_account_id: cgAccountId,
+        web_api_key: cgApiKey,
+        web_instance_id: device.id,
+        chatguru_endpoint_url: cgEndpointUrl,
+        status: deviceStatus,
+        last_heartbeat: now,
+        verify_token: crypto.randomUUID(),
+      } as any)
+      saveError = error
+    }
+
+    if (saveError) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao salvar configuração do aparelho.',
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Sucesso',
+        description: existing
+          ? 'Aparelho atualizado com sucesso.'
+          : 'Aparelho adicionado com sucesso.',
+      })
       fetchConfigs()
     }
   }

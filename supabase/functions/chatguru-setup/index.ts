@@ -80,11 +80,9 @@ Deno.serve(async (req) => {
             return new Response(
               JSON.stringify({
                 success: false,
-                error:
-                  'Falha ao conectar ao Endpoint informado. Verifique a URL e tente novamente.',
-                details: `Status ${response.status}`,
+                error: 'Erro de Conexão: Endpoint não encontrado (404). Verifique a URL da API.',
               }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             )
           }
           if (
@@ -96,19 +94,20 @@ Deno.serve(async (req) => {
             return new Response(
               JSON.stringify({
                 success: false,
-                error: 'Credenciais Inválidas',
-                details: text.substring(0, 100),
+                error: 'Erro de Autenticação: Verifique seu Account ID e API Key.',
               }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             )
           }
           return new Response(
             JSON.stringify({
               success: false,
-              error: 'Falha na comunicação com a API do ChatGuru',
-              details: `Status ${response.status}: ${text.substring(0, 100)}`,
+              error: `Erro na API (${response.status}): Falha na comunicação com o ChatGuru.`,
             }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            {
+              status: response.status || 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            },
           )
         }
 
@@ -116,8 +115,25 @@ Deno.serve(async (req) => {
           let safeError = String(result.error)
           if (web_api_key) safeError = safeError.split(web_api_key).join('***MASKED_KEY***')
           return new Response(
-            JSON.stringify({ success: false, error: 'Credenciais Inválidas', details: safeError }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            JSON.stringify({
+              success: false,
+              error: 'Erro de Autenticação: Verifique seu Account ID e API Key.',
+              details: safeError,
+            }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
+        }
+
+        if (!response.ok) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Erro na API (${response.status}): Verifique suas credenciais e URL.`,
+            }),
+            {
+              status: response.status,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            },
           )
         }
 

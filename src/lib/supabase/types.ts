@@ -239,6 +239,7 @@ export type Database = {
         Row: {
           access_token: string | null
           chatguru_account_id: string | null
+          chatguru_endpoint_url: string | null
           connection_type: string
           created_at: string
           id: string
@@ -254,6 +255,7 @@ export type Database = {
         Insert: {
           access_token?: string | null
           chatguru_account_id?: string | null
+          chatguru_endpoint_url?: string | null
           connection_type?: string
           created_at?: string
           id?: string
@@ -269,6 +271,7 @@ export type Database = {
         Update: {
           access_token?: string | null
           chatguru_account_id?: string | null
+          chatguru_endpoint_url?: string | null
           connection_type?: string
           created_at?: string
           id?: string
@@ -503,6 +506,7 @@ export const Constants = {
 //   status: text (nullable, default: 'disconnected'::text)
 //   last_heartbeat: timestamp with time zone (nullable)
 //   chatguru_account_id: text (nullable)
+//   chatguru_endpoint_url: text (nullable)
 
 // --- CONSTRAINTS ---
 // Table: company_settings
