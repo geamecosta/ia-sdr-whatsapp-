@@ -403,6 +403,7 @@ Deno.serve(async (req) => {
     try {
       const payload: any = {
         key,
+        api_key: key,
         webhook_url: webhookUrl,
       }
 

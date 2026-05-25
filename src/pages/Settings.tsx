@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PersonaSettings } from './settings/PersonaSettings'
 import { WhatsappSettings } from './settings/WhatsappSettings'
@@ -6,6 +7,13 @@ import { UsageSettings } from './settings/UsageSettings'
 import { LogsSettings } from './settings/LogsSettings'
 
 export default function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const currentTab = searchParams.get('tab') || 'persona'
+
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value })
+  }
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       <div>
@@ -15,7 +23,7 @@ export default function Settings() {
         </p>
       </div>
 
-      <Tabs defaultValue="persona" className="space-y-6">
+      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="flex flex-wrap w-full max-w-3xl h-auto gap-1 bg-muted p-1 rounded-md">
           <TabsTrigger value="persona" className="flex-1 h-9 min-w-[120px]">
             PERSONA DA IA

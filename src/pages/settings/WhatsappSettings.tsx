@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { useSearchParams } from 'react-router-dom'
+import { ToastAction } from '@/components/ui/toast'
 import { Loader2, Zap, Plus, Smartphone, Trash2, Bot } from 'lucide-react'
 import {
   Dialog,
@@ -34,6 +36,7 @@ import { Badge } from '@/components/ui/badge'
 export function WhatsappSettings() {
   const { user } = useAuth()
   const { toast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [configs, setConfigs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -203,12 +206,27 @@ export function WhatsappSettings() {
       } else {
         toast({
           title: 'Erro',
-          description: json.error || 'Falha ao conectar.',
+          description:
+            'Erro de comunicação com o ChatGuru ao configurar Webhook. Verifique as credenciais ou consulte os Logs do Sistema.',
           variant: 'destructive',
+          action: (
+            <ToastAction altText="Ver Logs" onClick={() => setSearchParams({ tab: 'logs' })}>
+              Ver Logs
+            </ToastAction>
+          ),
         })
       }
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' })
+      toast({
+        title: 'Erro',
+        description: err.message || 'Falha na conexão.',
+        variant: 'destructive',
+        action: (
+          <ToastAction altText="Ver Logs" onClick={() => setSearchParams({ tab: 'logs' })}>
+            Ver Logs
+          </ToastAction>
+        ),
+      })
     } finally {
       setConnectingId(null)
     }
