@@ -82,6 +82,22 @@ export const db = {
     if (error) throw error
     return data
   },
+  // Metrics
+  async getMetrics() {
+    const { data: leads, error: leadsError } = await supabase.from('leads').select('status')
+    if (leadsError) throw leadsError
+
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
+      .select('role, created_at')
+      .gte('created_at', sevenDaysAgo.toISOString())
+    if (messagesError) throw messagesError
+
+    return { leads: leads || [], messages: messages || [] }
+  },
   // Logs
   async getLogs() {
     const { data, error } = await supabase

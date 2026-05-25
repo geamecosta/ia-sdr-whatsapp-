@@ -45,16 +45,27 @@ export default function Dashboard() {
           }
         }
 
-        const [leadsData, logsData, configData] = await Promise.all([
+        const [leadsData, logsData, configData, settingsData, metricsData] = await Promise.all([
           safeFetch(db.getLeads(), []),
           safeFetch(db.getLogs(), []),
           safeFetch(db.getWhatsappConfig(user.id), null),
+          safeFetch(db.getCompanySettings(user.id), null),
+          safeFetch(db.getMetrics(), { leads: [], messages: [] }),
         ])
 
         if (mounted) {
           setLeads(Array.isArray(leadsData) ? leadsData : [])
           setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : [])
           setWaConfig(configData)
+          setMetrics(metricsData)
+
+          const isSettingsComplete =
+            settingsData?.company_objectives &&
+            settingsData?.sales_manual &&
+            settingsData?.tone_of_voice
+          if (!isSettingsComplete) {
+            setShowOnboarding(true)
+          }
         }
       } catch (err: any) {
         console.error('Error loading dashboard data:', err)
@@ -85,6 +96,31 @@ export default function Dashboard() {
   }, [leads])
 
   const isConfigured = Boolean(waConfig?.access_token && waConfig?.phone_number_id)
+
+  const messageChartData = useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      return d.toISOString().split('T')[0]
+    })
+
+    return last7Days.map((date) => {
+      const dayMessages = metrics.messages.filter((m: any) => m.created_at?.startsWith(date))
+      const sent = dayMessages.filter((m: any) => m.role === 'assistant').length
+      const received = dayMessages.filter((m: any) => m.role === 'user').length
+      return { date, sent, received }
+    })
+  }, [])
+
+  const leadsByStatusData = useMemo(
+    () => [
+      { status: 'Novo', count: stats.novo, fill: 'var(--color-novo)' },
+      { status: 'Em Atendimento', count: stats.emAtendimento, fill: 'var(--color-emAtendimento)' },
+      { status: 'Convertido', count: stats.convertido, fill: 'var(--color-convertido)' },
+      { status: 'Outros', count: stats.outros, fill: 'var(--color-outros)' },
+    ],
+    [stats],
+  )
 
   if (loading) {
     return (
@@ -201,7 +237,79 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Status dos Leads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                count: { label: 'Leads' },
+                novo: { color: 'hsl(var(--chart-1))' },
+                emAtendimento: { color: 'hsl(var(--chart-2))' },
+                convertido: { color: 'hsl(var(--chart-3))' },
+                outros: { color: 'hsl(var(--chart-4))' },
+              }}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={leadsByStatusData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="status" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {leadsByStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Volume de Mensagens (Últimos 7 dias)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                sent: { label: 'Enviadas', color: 'hsl(var(--chart-1))' },
+                received: { label: 'Recebidas', color: 'hsl(var(--chart-2))' },
+              }}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={messageChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(v) => {
+                      const d = new Date(v)
+                      return `${d.getDate()}/${d.getMonth() + 1}`
+                    }}
+                  />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Line type="monotone" dataKey="sent" stroke="var(--color-sent)" strokeWidth={2} />
+                  <Line
+                    type="monotone"
+                    dataKey="received"
+                    stroke="var(--color-received)"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Logs de Execução Recentes</h2>
@@ -295,6 +403,8 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      <OnboardingModal open={showOnboarding} onComplete={() => setShowOnboarding(false)} />
     </div>
   )
 }
