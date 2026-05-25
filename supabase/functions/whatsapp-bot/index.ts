@@ -98,13 +98,16 @@ Deno.serve(async (req) => {
 
       const url = new URL(req.url)
       const userIdQuery = url.searchParams.get('user_id')
+      const tokenQuery = url.searchParams.get('token')
 
       for (const event of events) {
         if (!event.msgText) continue
 
         let configQuery = supabase
           .from('whatsapp_configs')
-          .select('user_id, access_token, web_api_key, web_instance_id, connection_type')
+          .select(
+            'user_id, access_token, web_api_key, web_instance_id, connection_type, verify_token',
+          )
         if (event.type === 'official') {
           configQuery = configQuery.eq('phone_number_id', event.phoneNumberId).single()
         } else if (event.type === 'chatguru') {
@@ -137,6 +140,18 @@ Deno.serve(async (req) => {
 
         const { data: config } = await configQuery
         if (!config) continue
+
+        if (event.type === 'chatguru' || event.type === 'web') {
+          if (config.verify_token && config.verify_token !== tokenQuery) {
+            await supabase.from('execution_logs').insert({
+              user_id: config.user_id,
+              level: 'error',
+              message: 'Webhook bloqueado: Token de verificação inválido',
+              details: { type: event.type, providedToken: tokenQuery },
+            })
+            continue
+          }
+        }
 
         // Register heartbeat and online status
         await supabase
@@ -237,6 +252,13 @@ Deno.serve(async (req) => {
         // Generate AI response
         let aiResponseText = ''
 
+        await supabase.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'info',
+          message: `Iniciando geração de resposta com IA`,
+          details: { leadId },
+        })
+
         try {
           if (openAiKey) {
             const openai = new OpenAI({ apiKey: openAiKey })
@@ -272,6 +294,12 @@ Deno.serve(async (req) => {
               'Desculpe, não consegui processar sua mensagem.'
           } else {
             aiResponseText = `Olá, ${event.senderName}! Recebemos: "${event.msgText}".\n\n[Aviso: Chave da OpenAI não configurada. Simulação Ativa]\nTom: "${settings?.tone_of_voice || 'Padrão'}"`
+            await supabase.from('execution_logs').insert({
+              user_id: config.user_id,
+              level: 'warning',
+              message: `Chave OpenAI (OPENAI_API_KEY) não configurada no servidor. Usando resposta simulada.`,
+              details: { leadId },
+            })
           }
         } catch (error: any) {
           aiResponseText = `Olá! Recebi sua mensagem, mas ocorreu um erro temporário no processamento da AI.`
@@ -362,6 +390,15 @@ async function sendWhatsAppMessage(
         .eq('user_id', config.user_id)
     }
   } else if (event.type === 'chatguru') {
+    if (!config.web_api_key || !config.web_instance_id) {
+      await supabaseClient.from('execution_logs').insert({
+        user_id: config.user_id,
+        level: 'error',
+        message: `Credenciais do ChatGuru ausentes (API Key ou Instance ID).`,
+        details: { to },
+      })
+      return
+    }
     // Envio via ChatGuru API
     try {
       const cgResponse = await fetch(`https://chatguru.app/api/v1?action=send_message`, {

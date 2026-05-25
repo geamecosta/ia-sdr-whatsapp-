@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     // Fetch user's whatsapp config
     const { data: config, error: configError } = await supabase
       .from('whatsapp_configs')
-      .select('web_api_key, web_instance_id')
+      .select('web_api_key, web_instance_id, verify_token')
       .eq('user_id', user.id)
       .eq('connection_type', 'chatguru')
       .single()
@@ -78,8 +78,18 @@ Deno.serve(async (req) => {
       )
     }
 
+    let verifyToken = config.verify_token
+    if (!verifyToken) {
+      verifyToken = crypto.randomUUID()
+      await supabase
+        .from('whatsapp_configs')
+        .update({ verify_token: verifyToken })
+        .eq('user_id', user.id)
+        .eq('connection_type', 'chatguru')
+    }
+
     // Construct Webhook URL
-    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}`
+    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}&token=${verifyToken}`
 
     // Tenta registrar o webhook usando a API do ChatGuru
     const chatGuruUrl = `https://chatguru.app/api/v1?action=webhook_config`
