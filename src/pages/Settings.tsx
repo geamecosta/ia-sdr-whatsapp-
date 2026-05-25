@@ -218,21 +218,33 @@ export default function Settings() {
       toast({
         variant: 'destructive',
         title: 'Erro',
-        description: 'A API Key é obrigatória para registrar no ChatGuru.',
+        description:
+          'A API Key é obrigatória para registrar no ChatGuru. Salve as credenciais primeiro.',
       })
       return
     }
     setIsRegisteringWebhook(true)
     try {
-      const { error } = await supabase.functions.invoke('chatguru-setup', {
-        body: {
-          key: waSettings.web_api_key,
-          phone_id: waSettings.web_instance_id,
-          webhook_url: personalizedWebhookUrl,
-        },
-      })
-      if (error) throw error
-      toast({ title: 'Sucesso', description: 'Webhook registrado no ChatGuru com sucesso.' })
+      const { data, error } = await supabase.functions.invoke('chatguru-setup')
+
+      if (error) {
+        let errorMsg = error.message
+        if (error.context && typeof error.context.json === 'function') {
+          try {
+            const errData = await error.context.json()
+            errorMsg = errData.details ? `${errData.error}: ${errData.details}` : errData.error
+          } catch (e) {
+            // Keep original error message if JSON parsing fails
+          }
+        }
+        throw new Error(errorMsg)
+      }
+
+      if (data && !data.success) {
+        throw new Error(data.details ? `${data.error}: ${data.details}` : data.error)
+      }
+
+      toast({ title: 'Sucesso', description: 'Webhook registrado com sucesso no ChatGuru!' })
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao registrar webhook', description: e.message })
     }
