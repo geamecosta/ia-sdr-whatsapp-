@@ -42,6 +42,33 @@ export type Database = {
         }
         Relationships: []
       }
+      execution_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          id: string
+          level: string
+          message: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          id?: string
+          level: string
+          message: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          id?: string
+          level?: string
+          message?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           created_at: string
@@ -308,6 +335,13 @@ export const Constants = {
 //   system_prompt: text (nullable, default: ''::text)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+// Table: execution_logs
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   level: text (not null)
+//   message: text (not null)
+//   details: jsonb (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
 // Table: leads
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -340,6 +374,9 @@ export const Constants = {
 //   PRIMARY KEY company_settings_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY company_settings_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   UNIQUE company_settings_user_id_key: UNIQUE (user_id)
+// Table: execution_logs
+//   PRIMARY KEY execution_logs_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY execution_logs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 // Table: leads
 //   PRIMARY KEY leads_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY leads_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
@@ -360,6 +397,11 @@ export const Constants = {
 //   Policy "Users can manage own company_settings" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
+// Table: execution_logs
+//   Policy "Users can insert own logs" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "Users can view own logs" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
 // Table: leads
 //   Policy "Users can manage own leads" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
@@ -395,6 +437,8 @@ export const Constants = {
 // --- INDEXES ---
 // Table: company_settings
 //   CREATE UNIQUE INDEX company_settings_user_id_key ON public.company_settings USING btree (user_id)
+// Table: execution_logs
+//   CREATE INDEX execution_logs_user_id_idx ON public.execution_logs USING btree (user_id)
 // Table: leads
 //   CREATE UNIQUE INDEX leads_user_id_phone_number_key ON public.leads USING btree (user_id, phone_number)
 // Table: whatsapp_configs

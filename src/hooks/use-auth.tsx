@@ -9,6 +9,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<{ error: any }>
   loading: boolean
+  mfaStatus: { currentLevel: string; nextLevel: string }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -23,20 +24,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mfaStatus, setMfaStatus] = useState({ currentLevel: 'aal1', nextLevel: 'aal1' })
 
   useEffect(() => {
+    const updateMfaStatus = () => {
+      supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
+        if (data) {
+          setMfaStatus({
+            currentLevel: data.currentLevel,
+            nextLevel: data.nextLevel,
+          })
+        }
+      })
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+      updateMfaStatus()
     })
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+      updateMfaStatus()
     })
+
     return () => subscription.unsubscribe()
   }, [])
 

@@ -15,7 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Bot, Phone } from 'lucide-react'
+import { Bot, Phone, Shield } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 
 export default function Settings() {
   const { user } = useAuth()
@@ -39,6 +41,13 @@ export default function Settings() {
   })
   const [isSavingWa, setIsSavingWa] = useState(false)
 
+  const [mfaFactors, setMfaFactors] = useState<any[]>([])
+  const [mfaQrCode, setMfaQrCode] = useState('')
+  const [mfaFactorId, setMfaFactorId] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
+  const [isEnrollingMfa, setIsEnrollingMfa] = useState(false)
+  const [isMfaLoading, setIsMfaLoading] = useState(false)
+
   useEffect(() => {
     if (user) {
       db.getCompanySettings(user.id).then((data) => {
@@ -47,8 +56,69 @@ export default function Settings() {
       db.getWhatsappConfig(user.id).then((data) => {
         if (data) setWaSettings(data)
       })
+      loadMfaFactors()
     }
   }, [user])
+
+  const loadMfaFactors = async () => {
+    const { data } = await supabase.auth.mfa.listFactors()
+    if (data) setMfaFactors(data.totp || [])
+  }
+
+  const handleStartMfaEnroll = async () => {
+    setIsEnrollingMfa(true)
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' })
+      if (error) throw error
+      setMfaQrCode(data.totp.qr_code)
+      setMfaFactorId(data.id)
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message })
+      setIsEnrollingMfa(false)
+    }
+  }
+
+  const handleVerifyMfaEnroll = async () => {
+    if (!mfaCode || !mfaFactorId) return
+    setIsMfaLoading(true)
+    try {
+      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      })
+      if (challengeError) throw challengeError
+
+      const { error } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challenge.id,
+        code: mfaCode,
+      })
+      if (error) throw error
+
+      await db.addLog('info', 'MFA Ativado', { event: 'mfa_enrolled', factorId: mfaFactorId })
+
+      toast({ title: 'MFA ativado com sucesso!' })
+      setMfaQrCode('')
+      setMfaFactorId('')
+      setMfaCode('')
+      setIsEnrollingMfa(false)
+      loadMfaFactors()
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message })
+    }
+    setIsMfaLoading(false)
+  }
+
+  const handleUnenrollMfa = async (factorId: string) => {
+    try {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId })
+      if (error) throw error
+      await db.addLog('info', 'MFA Desativado', { event: 'mfa_unenrolled', factorId })
+      toast({ title: 'MFA desativado' })
+      loadMfaFactors()
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message })
+    }
+  }
 
   const handleSaveAi = async () => {
     if (!user) return
@@ -103,12 +173,15 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="ai" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="ai" className="gap-2">
             <Bot className="h-4 w-4" /> Persona da IA
           </TabsTrigger>
           <TabsTrigger value="wa" className="gap-2">
             <Phone className="h-4 w-4" /> WhatsApp
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-2">
+            <Shield className="h-4 w-4" /> Segurança
           </TabsTrigger>
         </TabsList>
 
@@ -277,6 +350,126 @@ export default function Settings() {
                 {isSavingWa ? 'Salvando...' : 'Salvar Credenciais'}
               </Button>
             </CardFooter>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="space-y-6 mt-6">
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle>Autenticação de Dois Fatores (MFA)</CardTitle>
+              <CardDescription>
+                Proteja sua conta exigindo um código adicional ao fazer login em novos dispositivos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {mfaFactors.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center gap-3">
+                    <Shield className="h-5 w-5" />
+                    <div>
+                      <p className="font-medium">MFA está ativado</p>
+                      <p className="text-sm opacity-90">
+                        Sua conta está protegida com autenticação de dois fatores.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {mfaFactors.map((factor) => (
+                      <div
+                        key={factor.id}
+                        className="flex items-center justify-between p-3 border rounded-md"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">
+                            Aplicativo Autenticador (TOTP)
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Adicionado em {new Date(factor.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleUnenrollMfa(factor.id)}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {!isEnrollingMfa ? (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        A autenticação de dois fatores adiciona uma camada extra de segurança à sua
+                        conta. Uma vez ativada, você precisará inserir um código do seu aplicativo
+                        autenticador ao fazer login.
+                      </p>
+                      <Button onClick={handleStartMfaEnroll}>
+                        Configurar Aplicativo Autenticador
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-medium">1. Escaneie o QR Code</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Abra o seu aplicativo autenticador (como Google Authenticator, Authy, etc)
+                          e escaneie a imagem abaixo.
+                        </p>
+                        <div
+                          className="bg-white p-4 rounded-lg inline-block my-2"
+                          dangerouslySetInnerHTML={{ __html: mfaQrCode }}
+                        />
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">2. Verifique o Código</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Insira o código de 6 dígitos gerado pelo seu aplicativo para confirmar a
+                          configuração.
+                        </p>
+                        <div className="flex flex-col gap-4 max-w-[320px]">
+                          <InputOTP
+                            maxLength={6}
+                            value={mfaCode}
+                            onChange={setMfaCode}
+                            disabled={isMfaLoading}
+                          >
+                            <InputOTPGroup>
+                              <InputOTPSlot index={0} />
+                              <InputOTPSlot index={1} />
+                              <InputOTPSlot index={2} />
+                              <InputOTPSlot index={3} />
+                              <InputOTPSlot index={4} />
+                              <InputOTPSlot index={5} />
+                            </InputOTPGroup>
+                          </InputOTP>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleVerifyMfaEnroll}
+                              disabled={isMfaLoading || mfaCode.length < 6}
+                              className="flex-1"
+                            >
+                              {isMfaLoading ? 'Verificando...' : 'Ativar MFA'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => setIsEnrollingMfa(false)}
+                              disabled={isMfaLoading}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
