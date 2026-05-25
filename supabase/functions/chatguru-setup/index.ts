@@ -344,7 +344,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    const { web_api_key: key, web_instance_id: phone_id } = config
+    const key = body.api_key || config.web_api_key
+    const phone_id = body.phone_id || config.web_instance_id
+    const chatguru_account_id = body.account_id || config.chatguru_account_id
+    const chatguru_endpoint_url = body.endpoint_url || config.chatguru_endpoint_url
 
     if (!key) {
       return new Response(
@@ -370,9 +373,7 @@ Deno.serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}&token=${verifyToken}`
 
-    const normalizedEndpoint = normalizeUrl(
-      config.chatguru_endpoint_url || 'https://chatguru.app/api/v1',
-    )
+    const normalizedEndpoint = normalizeUrl(chatguru_endpoint_url || 'https://chatguru.app/api/v1')
     let parsedUrl
     try {
       parsedUrl = new URL(normalizedEndpoint)
@@ -393,10 +394,10 @@ Deno.serve(async (req) => {
       'X-API-KEY': key,
       key: key,
     }
-    if (config.chatguru_account_id) {
-      requestHeaders['X-ACCOUNT-ID'] = config.chatguru_account_id
-      requestHeaders['account'] = config.chatguru_account_id
-      requestHeaders['account_id'] = config.chatguru_account_id
+    if (chatguru_account_id) {
+      requestHeaders['X-ACCOUNT-ID'] = chatguru_account_id
+      requestHeaders['account'] = chatguru_account_id
+      requestHeaders['account_id'] = chatguru_account_id
     }
 
     try {
@@ -409,9 +410,9 @@ Deno.serve(async (req) => {
         payload.phone_id = phone_id
       }
 
-      if (config.chatguru_account_id) {
-        payload.account_id = config.chatguru_account_id
-        payload.account = config.chatguru_account_id
+      if (chatguru_account_id) {
+        payload.account_id = chatguru_account_id
+        payload.account = chatguru_account_id
       }
 
       response = await fetch(chatGuruUrl, {
@@ -445,12 +446,18 @@ Deno.serve(async (req) => {
       await supabase.from('execution_logs').insert({
         user_id: user.id,
         level: 'error',
-        message: 'ChatGuru Connection Failed',
+        message: 'Erro de comunicação com o ChatGuru ao configurar Webhook',
         details: {
           endpoint: normalizedEndpoint,
           statusCode: response?.status,
           responseBody: text,
-          requestHeaders,
+          requestHeaders: {
+            ...requestHeaders,
+            Authorization: '***MASKED***',
+            'X-API-KEY': '***MASKED***',
+            key: '***MASKED***',
+          },
+          payload: { account_id: chatguru_account_id, has_api_key: !!key, phone_id },
         },
       })
       const errorMessage =

@@ -7,7 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Copy } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface SdrConfigFormProps {
   whatsappConfigId?: string | null
@@ -20,6 +27,9 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [hasExisting, setHasExisting] = useState(false)
+
+  const [templates, setTemplates] = useState<any[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('none')
 
   const [settings, setSettings] = useState<any>({
     company_objectives: '',
@@ -42,6 +52,14 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
       }
 
       const { data, error } = await query.maybeSingle()
+
+      const { data: allSettings } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('user_id', user.id)
+      if (allSettings) {
+        setTemplates(allSettings)
+      }
 
       if (data) {
         setSettings(data)
@@ -125,8 +143,59 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
     )
   }
 
+  const handleLoadTemplate = () => {
+    const t = templates.find((x) => x.id === selectedTemplate)
+    if (t) {
+      setSettings({
+        ...settings,
+        company_objectives: t.company_objectives || '',
+        sales_manual: t.sales_manual || '',
+        system_prompt: t.system_prompt || '',
+        tone_of_voice: t.tone_of_voice || '',
+        welcome_message_enabled: t.welcome_message_enabled || false,
+        welcome_message_content: t.welcome_message_content || '',
+      })
+      toast({
+        title: 'Persona Carregada',
+        description: 'Edite conforme necessário e clique em salvar.',
+      })
+    }
+  }
+
   return (
     <div className="space-y-5">
+      {templates.length > 0 && (
+        <div className="space-y-3 pb-5 border-b mb-5">
+          <Label>Carregar de uma Persona Existente (Templates)</Label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione um template..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum (Preencher manualmente)</SelectItem>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.whatsapp_config_id
+                      ? `Persona do Aparelho (ID: ${t.whatsapp_config_id.substring(0, 8)})`
+                      : 'Persona Global (Padrão)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="secondary"
+              onClick={handleLoadTemplate}
+              disabled={selectedTemplate === 'none'}
+              className="w-full sm:w-auto shrink-0"
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copiar Dados
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>Prompt de Sistema</Label>
         <Textarea

@@ -186,7 +186,14 @@ export function WhatsappSettings() {
           Authorization: `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'connect_device', config_id: config.id }),
+        body: JSON.stringify({
+          action: 'connect_device',
+          config_id: config.id,
+          account_id: config.chatguru_account_id,
+          api_key: config.web_api_key,
+          endpoint_url: config.chatguru_endpoint_url,
+          phone_id: config.web_instance_id || config.phone_number_id,
+        }),
       })
       const json = await res.json()
       if (res.ok && json.success) {
