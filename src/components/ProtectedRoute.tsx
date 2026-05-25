@@ -32,8 +32,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         if (mounted) {
           const isValid =
             !!configData &&
-            ((configData.connection_type === 'official' && !!configData.access_token) ||
-              (configData.connection_type === 'web' && !!configData.web_instance_id))
+            ((configData.connection_type === 'official' &&
+              !!configData.access_token &&
+              !!configData.phone_number_id) ||
+              (configData.connection_type === 'web' &&
+                !!configData.web_instance_id &&
+                !!configData.web_api_key))
           setIsSetupComplete(isValid)
           setCheckingSetup(false)
         }

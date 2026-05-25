@@ -152,30 +152,39 @@ export type Database = {
       whatsapp_configs: {
         Row: {
           access_token: string | null
+          connection_type: string
           created_at: string
           id: string
           phone_number_id: string | null
           updated_at: string
           user_id: string
           verify_token: string | null
+          web_api_key: string | null
+          web_instance_id: string | null
         }
         Insert: {
           access_token?: string | null
+          connection_type?: string
           created_at?: string
           id?: string
           phone_number_id?: string | null
           updated_at?: string
           user_id: string
           verify_token?: string | null
+          web_api_key?: string | null
+          web_instance_id?: string | null
         }
         Update: {
           access_token?: string | null
+          connection_type?: string
           created_at?: string
           id?: string
           phone_number_id?: string | null
           updated_at?: string
           user_id?: string
           verify_token?: string | null
+          web_api_key?: string | null
+          web_instance_id?: string | null
         }
         Relationships: []
       }
@@ -368,6 +377,9 @@ export const Constants = {
 //   verify_token: text (nullable, default: ''::text)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+//   connection_type: text (not null, default: 'official'::text)
+//   web_instance_id: text (nullable)
+//   web_api_key: text (nullable)
 
 // --- CONSTRAINTS ---
 // Table: company_settings

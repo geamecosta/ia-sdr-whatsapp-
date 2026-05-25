@@ -1,8 +1,11 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MessageSquare, Settings, Users, LogOut, Menu, Activity, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { supabase } from '@/lib/supabase/client'
+import { db } from '@/services/db'
+import { cn } from '@/lib/utils'
 import {
   Sheet,
   SheetContent,
@@ -21,6 +24,38 @@ export default function Layout() {
       navigate('/login')
     }
   }, [user, loading, navigate])
+
+  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected')
+
+  useEffect(() => {
+    if (user) {
+      db.getWhatsappConfig(user.id)
+        .then((config) => {
+          if (config) setConnectionStatus(config.status || 'disconnected')
+        })
+        .catch(console.error)
+
+      const channel = supabase
+        .channel('whatsapp_configs_status')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'whatsapp_configs',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            setConnectionStatus(payload.new.status || 'disconnected')
+          },
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [user])
 
   if (loading || !user) {
     return <div className="flex h-screen w-screen items-center justify-center">Carregando...</div>
@@ -72,6 +107,27 @@ export default function Layout() {
           <MessageSquare className="h-6 w-6 text-primary" />
           <span className="font-bold text-lg">IA SDR Pro</span>
         </div>
+        <div className="px-4 py-2 mt-2">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50 border shadow-sm">
+            <div
+              className={cn(
+                'h-2.5 w-2.5 rounded-full flex-shrink-0',
+                connectionStatus === 'connected'
+                  ? 'bg-green-500'
+                  : connectionStatus === 'connecting'
+                    ? 'bg-yellow-500 animate-pulse'
+                    : 'bg-red-500',
+              )}
+            />
+            <span className="text-sm font-medium capitalize truncate">
+              {connectionStatus === 'connected'
+                ? 'Online'
+                : connectionStatus === 'connecting'
+                  ? 'Conectando...'
+                  : 'Offline'}
+            </span>
+          </div>
+        </div>
         <nav className="flex-1 p-4 space-y-2">
           <NavLinks />
         </nav>
@@ -99,6 +155,27 @@ export default function Layout() {
             <SheetContent side="left" className="flex flex-col">
               <SheetTitle>Menu</SheetTitle>
               <SheetDescription className="sr-only">Menu de navegação</SheetDescription>
+              <div className="mt-4">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/50 border shadow-sm">
+                  <div
+                    className={cn(
+                      'h-2.5 w-2.5 rounded-full flex-shrink-0',
+                      connectionStatus === 'connected'
+                        ? 'bg-green-500'
+                        : connectionStatus === 'connecting'
+                          ? 'bg-yellow-500 animate-pulse'
+                          : 'bg-red-500',
+                    )}
+                  />
+                  <span className="text-sm font-medium capitalize truncate">
+                    {connectionStatus === 'connected'
+                      ? 'Online'
+                      : connectionStatus === 'connecting'
+                        ? 'Conectando...'
+                        : 'Offline'}
+                  </span>
+                </div>
+              </div>
               <nav className="flex-1 space-y-2 mt-4">
                 <NavLinks />
               </nav>

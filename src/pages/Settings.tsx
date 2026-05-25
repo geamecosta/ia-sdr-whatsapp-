@@ -19,6 +19,7 @@ import { Bot, Phone, Shield } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import { useNavigate } from 'react-router-dom'
 
 export default function Settings() {
@@ -30,6 +31,8 @@ export default function Settings() {
     sales_manual: '',
     tone_of_voice: '',
     company_objectives: '',
+    welcome_message_enabled: false,
+    welcome_message_content: '',
   })
   const [isSavingAi, setIsSavingAi] = useState(false)
   const [testPrompt, setTestPrompt] = useState('')
@@ -60,7 +63,15 @@ export default function Settings() {
     if (user) {
       db.getCompanySettings(user.id)
         .then((data) => {
-          if (mounted && data) setAiSettings(data)
+          if (mounted && data)
+            setAiSettings({
+              system_prompt: data.system_prompt || '',
+              sales_manual: data.sales_manual || '',
+              tone_of_voice: data.tone_of_voice || '',
+              company_objectives: data.company_objectives || '',
+              welcome_message_enabled: data.welcome_message_enabled || false,
+              welcome_message_content: data.welcome_message_content || '',
+            })
         })
         .catch(console.error)
 
@@ -153,7 +164,7 @@ export default function Settings() {
       await db.updateCompanySettings(user.id, aiSettings)
       toast({
         title: 'Configurações salvas',
-        description: 'O perfil da IA foi atualizado com sucesso.',
+        description: 'O perfil da IA e automações foram atualizados com sucesso.',
       })
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message })
@@ -225,6 +236,42 @@ export default function Settings() {
         <TabsContent value="ai" className="space-y-6 mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Automação Inicial</CardTitle>
+                  <CardDescription>Configure como a IA recebe novos leads.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Mensagem de Boas-vindas</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Enviar automaticamente quando um novo lead entrar em contato.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={aiSettings.welcome_message_enabled}
+                      onCheckedChange={(c) =>
+                        setAiSettings({ ...aiSettings, welcome_message_enabled: c })
+                      }
+                    />
+                  </div>
+                  {aiSettings.welcome_message_enabled && (
+                    <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                      <Label>Conteúdo da Mensagem de Boas-vindas</Label>
+                      <Textarea
+                        rows={3}
+                        placeholder="Olá! Bem-vindo à nossa empresa..."
+                        value={aiSettings.welcome_message_content || ''}
+                        onChange={(e) =>
+                          setAiSettings({ ...aiSettings, welcome_message_content: e.target.value })
+                        }
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Comportamento e Tom</CardTitle>

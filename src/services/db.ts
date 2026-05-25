@@ -56,10 +56,20 @@ export const db = {
   },
 
   async updateWhatsappConfig(userId: string, config: any) {
-    const { error } = await supabase
+    const { data: existing } = await supabase
       .from('whatsapp_configs')
-      .upsert({ user_id: userId, ...config }, { onConflict: 'user_id' })
-    if (error) throw error
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (existing) {
+      const { error } = await supabase.from('whatsapp_configs').update(config).eq('user_id', userId)
+      if (error) throw error
+    } else {
+      const { error } = await supabase
+        .from('whatsapp_configs')
+        .insert({ user_id: userId, ...config })
+      if (error) throw error
+    }
   },
 
   async addLog(level: string, message: string, details?: any) {
