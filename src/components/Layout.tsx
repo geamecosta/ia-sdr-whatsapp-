@@ -70,10 +70,10 @@ export default function Layout() {
   const NavLinks = () => (
     <>
       <Link
-        to="/"
+        to="/dashboard"
         className={cn(
           'flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium',
-          location.pathname === '/'
+          location.pathname === '/dashboard' || location.pathname === '/'
             ? 'bg-primary text-primary-foreground shadow-sm'
             : 'hover:bg-muted text-muted-foreground hover:text-foreground',
         )}
@@ -162,6 +162,21 @@ export default function Layout() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Desktop Header */}
+        <header className="hidden md:flex items-center justify-between p-4 border-b bg-background h-[73px]">
+          <h1 className="font-semibold text-xl capitalize">
+            {location.pathname === '/dashboard' || location.pathname === '/'
+              ? 'Dashboard'
+              : location.pathname.substring(1).replace('-', ' ')}
+          </h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="truncate max-w-[200px]">{user.email}</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 border-b bg-background">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-6 w-6 text-primary" />

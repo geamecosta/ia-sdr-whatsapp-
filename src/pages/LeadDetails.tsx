@@ -1,68 +1,59 @@
-import { useAuth } from '@/hooks/use-auth'
-import { supabase } from '@/lib/supabase/client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { supabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, User, Phone, Calendar } from 'lucide-react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { ArrowLeft, Loader2, User, Bot } from 'lucide-react'
 
 export default function LeadDetails() {
-  const { id } = useParams<{ id: string }>()
-  const { user } = useAuth()
+  const { id } = useParams()
   const [lead, setLead] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user || !id) return
+    if (!id) return
 
-    const fetchLeadAndMessages = async () => {
-      const { data: leadData } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single()
+    const fetchData = async () => {
+      const [leadRes, messagesRes] = await Promise.all([
+        supabase.from('leads').select('*').eq('id', id).single(),
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('lead_id', id)
+          .order('created_at', { ascending: true }),
+      ])
 
-      if (leadData) setLead(leadData)
+      if (leadRes.data) setLead(leadRes.data)
+      if (messagesRes.data) setMessages(messagesRes.data)
 
-      const { data: msgData } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('lead_id', id)
-        .order('created_at', { ascending: true })
-
-      if (msgData) {
-        setMessages(msgData)
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-      }
+      setLoading(false)
     }
 
-    fetchLeadAndMessages()
+    fetchData()
+  }, [id])
 
-    const channel = supabase
-      .channel(`public:messages:lead_id=${id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `lead_id=eq.${id}` },
-        (payload) => {
-          setMessages((current) => [...current, payload.new])
-          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-        },
-      )
-      .subscribe()
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user, id])
-
-  if (!lead) return <div className="p-8 text-center text-muted-foreground">Carregando lead...</div>
+  if (!lead) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-bold mb-4">Lead não encontrado</h2>
+        <Button asChild>
+          <Link to="/leads">Voltar para Leads</Link>
+        </Button>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col h-full max-h-[calc(100vh-6rem)] max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto pb-12">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="outline" size="icon" asChild>
           <Link to="/leads">
@@ -70,52 +61,49 @@ export default function LeadDetails() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            {lead.name || 'Lead Desconhecido'}
-          </h1>
-          <div className="flex items-center text-muted-foreground text-sm gap-4 mt-1">
-            <span className="flex items-center gap-1.5">
-              <Phone className="h-3 w-3" /> {lead.phone_number}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Calendar className="h-3 w-3" /> Criado em{' '}
-              {format(new Date(lead.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-            </span>
-          </div>
+          <h1 className="text-3xl font-bold tracking-tight">{lead.name || lead.phone_number}</h1>
+          <p className="text-muted-foreground">
+            {lead.phone_number} • Status: {lead.status}
+          </p>
         </div>
       </div>
 
-      <Card className="flex-1 flex flex-col min-h-[400px] border shadow-sm">
-        <CardHeader className="py-3 border-b bg-muted/20">
-          <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-            <User className="h-4 w-4" />
-            Histórico da Conversa
-          </CardTitle>
+      <Card className="flex flex-col h-[600px]">
+        <CardHeader className="border-b bg-muted/30 pb-4">
+          <CardTitle className="text-lg">Histórico da Conversa</CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/5">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col max-w-[85%] rounded-lg p-3 shadow-sm ${
-                msg.role === 'user'
-                  ? 'bg-card ml-auto rounded-tr-sm border'
-                  : 'bg-primary text-primary-foreground mr-auto rounded-tl-sm'
-              }`}
-            >
-              <span className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</span>
-              <span
-                className={`text-[10px] mt-2 font-medium ${msg.role === 'user' ? 'text-muted-foreground text-right' : 'text-primary-foreground/70 text-left'}`}
-              >
-                {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
-              </span>
+        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              Nenhuma mensagem registrada ainda.
             </div>
-          ))}
-          {messages.length === 0 && (
-            <div className="text-center text-muted-foreground py-12">
-              Nenhuma mensagem registrada nesta conversa ainda.
-            </div>
+          ) : (
+            messages.map((msg) => {
+              const isAssistant = msg.role === 'assistant'
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 max-w-[85%] ${isAssistant ? 'ml-auto flex-row-reverse' : ''}`}
+                >
+                  <div
+                    className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${isAssistant ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                  >
+                    {isAssistant ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                  </div>
+                  <div
+                    className={`p-3 rounded-lg ${isAssistant ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}
+                  >
+                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                    <span
+                      className={`text-[10px] block mt-1 ${isAssistant ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+                    >
+                      {new Date(msg.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              )
+            })
           )}
-          <div ref={messagesEndRef} />
         </CardContent>
       </Card>
     </div>

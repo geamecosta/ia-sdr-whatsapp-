@@ -93,9 +93,5 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/mfa-verify" replace state={{ from: location }} />
   }
 
-  if (isSetupComplete === false && location.pathname !== '/settings') {
-    return <Navigate to="/settings" replace state={{ from: location }} />
-  }
-
   return <>{children}</>
 }
