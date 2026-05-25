@@ -204,11 +204,15 @@ export function WhatsappSettings() {
         toast({ title: 'Sucesso', description: 'Conectado com sucesso!' })
         fetchConfigs()
       } else {
+        const detailsStr = String(json.details || '')
+        const isHtml = detailsStr.toLowerCase().includes('<html')
+        const errDesc = isHtml
+          ? 'O servidor retornou uma página inválida. Consulte os Logs.'
+          : detailsStr.substring(0, 150) || 'Erro de comunicação. Consulte os Logs.'
+
         toast({
           title: 'Erro',
-          description:
-            json.details ||
-            'Erro de comunicação com o ChatGuru ao configurar Webhook. Consulte os Logs para os detalhes técnicos.',
+          description: errDesc,
           variant: 'destructive',
           action: (
             <ToastAction altText="Ver Detalhes Técnicos" onClick={() => navigate('/logs')}>

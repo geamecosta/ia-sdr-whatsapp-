@@ -128,13 +128,18 @@ Deno.serve(async (req) => {
       parsedUrl = new URL('https://chatguru.app/api/v1')
     }
 
-    let chatGuruUrl = parsedUrl.toString()
-    if (chatGuruUrl.endsWith('/')) {
-      chatGuruUrl = chatGuruUrl.slice(0, -1)
+    // Protocol Enforcement
+    parsedUrl.protocol = 'https:'
+
+    // Endpoint Normalization
+    let baseUrl = parsedUrl.origin
+    if (parsedUrl.pathname && parsedUrl.pathname !== '/' && parsedUrl.pathname !== '/api/v1') {
+      let path = parsedUrl.pathname
+      if (path.endsWith('/')) path = path.slice(0, -1)
+      baseUrl += path
     }
-    if (!chatGuruUrl.includes('action=')) {
-      chatGuruUrl = `${chatGuruUrl}/?action=webhook_config`
-    }
+
+    let chatGuruUrl = `${baseUrl}/?action=webhook_config`
 
     let response
     let requestHeaders: Record<string, string> = {
@@ -149,21 +154,14 @@ Deno.serve(async (req) => {
       requestHeaders['account_id'] = chatguru_account_id
     }
 
+    const payload: any = {
+      key,
+      account_id: chatguru_account_id,
+      phone_id: phone_id,
+      webhook_url: webhookUrl,
+    }
+
     try {
-      const payload: any = {
-        key,
-        api_key: key,
-        account_id: chatguru_account_id,
-        account: chatguru_account_id,
-        webhook_url: webhookUrl,
-        webhook: webhookUrl, // added for compatibility
-      }
-
-      if (phone_id) {
-        payload.phone_id = phone_id
-        payload.device_id = phone_id
-      }
-
       response = await fetch(chatGuruUrl, {
         method: 'POST',
         headers: requestHeaders,
@@ -197,7 +195,7 @@ Deno.serve(async (req) => {
         level: 'error',
         message: 'Erro de comunicação com o ChatGuru ao configurar Webhook',
         details: {
-          endpoint: normalizedEndpoint,
+          endpoint: chatGuruUrl,
           statusCode: response?.status,
           responseBody: text,
           requestHeaders: {
@@ -206,19 +204,21 @@ Deno.serve(async (req) => {
             'X-API-KEY': '***MASKED***',
             key: '***MASKED***',
           },
-          payload: {
-            account_id: chatguru_account_id,
-            key: '***MASKED***',
-            phone_id,
-            webhook_url: webhookUrl,
-          },
+          payload: { ...payload, key: '***MASKED***' },
         },
       })
-      const errorMessage =
-        jsonResponse?.error ||
-        jsonResponse?.message ||
-        text ||
-        'A API Key ou Phone ID podem ser inválidos.'
+
+      let errorMessage = 'A API Key ou Phone ID podem ser inválidos.'
+      if (jsonResponse) {
+        errorMessage = jsonResponse.error || jsonResponse.message || errorMessage
+      } else if (text) {
+        errorMessage = text.length > 150 ? text.substring(0, 150) + '...' : text
+        if (errorMessage.toLowerCase().includes('<html')) {
+          errorMessage =
+            'O servidor retornou uma página HTML indicando erro na rota (ex: 404). Verifique a URL do ChatGuru.'
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: false,
@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
           details: errorMessage,
         }),
         {
-          status: 400,
+          status: response.status >= 400 ? response.status : 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       )

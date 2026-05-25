@@ -151,6 +151,42 @@ export type Database = {
           },
         ]
       }
+      persona_templates: {
+        Row: {
+          company_objectives: string | null
+          created_at: string
+          id: string
+          name: string
+          sales_manual: string | null
+          system_prompt: string | null
+          tone_of_voice: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_objectives?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          sales_manual?: string | null
+          system_prompt?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_objectives?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          sales_manual?: string | null
+          system_prompt?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -470,6 +506,16 @@ export const Constants = {
 //   content: text (not null)
 //   created_at: timestamp with time zone (not null, default: now())
 //   provider_message_id: text (nullable)
+// Table: persona_templates
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   name: text (not null)
+//   system_prompt: text (nullable)
+//   tone_of_voice: text (nullable)
+//   company_objectives: text (nullable)
+//   sales_manual: text (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
 // Table: profiles
 //   id: uuid (not null)
 //   email: text (not null)
@@ -523,6 +569,9 @@ export const Constants = {
 // Table: messages
 //   FOREIGN KEY messages_lead_id_fkey: FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
 //   PRIMARY KEY messages_pkey: PRIMARY KEY (id)
+// Table: persona_templates
+//   PRIMARY KEY persona_templates_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY persona_templates_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
@@ -554,6 +603,10 @@ export const Constants = {
 //   Policy "Users can manage own messages" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
+// Table: persona_templates
+//   Policy "Users can manage own persona_templates" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
 // Table: profiles
 //   Policy "Authenticated users can view all profiles" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: true
