@@ -50,6 +50,29 @@ export default function Dashboard() {
   const [userQuota, setUserQuota] = useState<any>(null)
   const [botStatus, setBotStatus] = useState<any>({ status: 'disconnected' })
 
+  // Moved derivation up to ensure it's defined before any conditional returns
+  let derivedBotStatus = 'Disconnected'
+  let derivedBotStatusColor = 'bg-muted text-muted-foreground'
+  let derivedBotStatusIcon = <Info className="h-4 w-4" />
+
+  if (userQuota?.is_blocked) {
+    derivedBotStatus = 'Blocked (Administrativo)'
+    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
+    derivedBotStatusIcon = <Ban className="h-4 w-4" />
+  } else if (userQuota && userQuota.current_month_usage >= userQuota.monthly_token_limit) {
+    derivedBotStatus = 'Blocked (Out of Credits)'
+    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
+    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
+  } else if (botStatus.status === 'error') {
+    derivedBotStatus = 'Error (Technical Issue)'
+    derivedBotStatusColor = 'bg-yellow-500/10 text-yellow-600'
+    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
+  } else if (botStatus.status === 'connected') {
+    derivedBotStatus = 'Active'
+    derivedBotStatusColor = 'bg-green-500/10 text-green-600'
+    derivedBotStatusIcon = <CheckCircle2 className="h-4 w-4" />
+  }
+
   // Admin Stats
   const [adminStats, setAdminStats] = useState({
     totalTokens: 0,
@@ -186,6 +209,36 @@ export default function Dashboard() {
         .from('usage_quotas')
         .update({ current_month_usage: 0 })
         .eq('user_id', userId)
+      if (error) throw error
+      toast.success('Uso resetado com sucesso.')
+      fetchDashboardData()
+    } catch (e: any) {
+      toast.error('Erro ao resetar uso: ' + e.message)
+    }
+  }
+
+  const handleUserAddBalance = async (additionalAmount: number) => {
+    if (!userQuota || !user) return
+    try {
+      const { error } = await supabase
+        .from('usage_quotas')
+        .update({ monthly_token_limit: userQuota.monthly_token_limit + additionalAmount })
+        .eq('user_id', user.id)
+      if (error) throw error
+      toast.success(`Adicionado ${additionalAmount.toLocaleString()} tokens à cota.`)
+      fetchDashboardData()
+    } catch (e: any) {
+      toast.error('Erro ao adicionar saldo: ' + e.message)
+    }
+  }
+
+  const handleUserResetUsage = async () => {
+    if (!userQuota || !user) return
+    try {
+      const { error } = await supabase
+        .from('usage_quotas')
+        .update({ current_month_usage: 0 })
+        .eq('user_id', user.id)
       if (error) throw error
       toast.success('Uso resetado com sucesso.')
       fetchDashboardData()
@@ -369,28 +422,6 @@ export default function Dashboard() {
       ? Math.min((userQuota.current_month_usage / userQuota.monthly_token_limit) * 100, 100)
       : 0
 
-  let derivedBotStatus = 'Disconnected'
-  let derivedBotStatusColor = 'bg-muted text-muted-foreground'
-  let derivedBotStatusIcon = <Info className="h-4 w-4" />
-
-  if (userQuota?.is_blocked) {
-    derivedBotStatus = 'Blocked (Administrativo)'
-    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
-    derivedBotStatusIcon = <Ban className="h-4 w-4" />
-  } else if (userQuota && userQuota.current_month_usage >= userQuota.monthly_token_limit) {
-    derivedBotStatus = 'Blocked (Out of Credits)'
-    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
-    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
-  } else if (botStatus.status === 'error') {
-    derivedBotStatus = 'Error (Technical Issue)'
-    derivedBotStatusColor = 'bg-yellow-500/10 text-yellow-600'
-    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
-  } else if (botStatus.status === 'connected') {
-    derivedBotStatus = 'Active'
-    derivedBotStatusColor = 'bg-green-500/10 text-green-600'
-    derivedBotStatusIcon = <CheckCircle2 className="h-4 w-4" />
-  }
-
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
       <div>
@@ -405,14 +436,21 @@ export default function Dashboard() {
             Estado atual da sua conexão com o WhatsApp e IA.
           </p>
         </div>
-        <div
-          className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-full font-medium text-sm',
-            derivedBotStatusColor,
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              'flex items-center gap-2 px-3 py-1.5 rounded-full font-medium text-sm',
+              derivedBotStatusColor,
+            )}
+          >
+            {derivedBotStatusIcon}
+            {derivedBotStatus}
+          </div>
+          {botStatus?.status !== 'connected' && (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/settings">Reconectar</Link>
+            </Button>
           )}
-        >
-          {derivedBotStatusIcon}
-          {derivedBotStatus}
         </div>
       </div>
 
@@ -454,7 +492,10 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {userQuota?.current_month_usage?.toLocaleString() || 0}
+              {userQuota?.current_month_usage?.toLocaleString() || 0}{' '}
+              <span className="text-sm font-normal text-muted-foreground">
+                / {userQuota?.monthly_token_limit?.toLocaleString() || 0}
+              </span>
             </div>
             <div className="mt-2 flex items-center gap-2">
               <Progress
@@ -464,6 +505,12 @@ export default function Dashboard() {
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {quotaProgress.toFixed(0)}%
               </span>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <UserAddBalanceDialog userQuota={userQuota} onUpdate={handleUserAddBalance} />
+              <Button size="sm" variant="secondary" onClick={handleUserResetUsage}>
+                Resetar
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -517,6 +564,66 @@ export default function Dashboard() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function UserAddBalanceDialog({
+  userQuota,
+  onUpdate,
+}: {
+  userQuota: any
+  onUpdate: (amount: number) => void
+}) {
+  const [amount, setAmount] = useState('10000')
+  const [open, setOpen] = useState(false)
+
+  const handleSave = () => {
+    const additional = parseInt(amount, 10)
+    if (!isNaN(additional) && additional > 0) {
+      onUpdate(additional)
+      setOpen(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Adicionar Saldo
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Adicionar Créditos</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Adicione tokens ao seu limite mensal para continuar operando.
+          </p>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="amount" className="text-right">
+              Quantidade
+            </Label>
+            <Input
+              id="amount"
+              type="number"
+              step="1000"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
+          <Button type="button" onClick={handleSave}>
+            Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

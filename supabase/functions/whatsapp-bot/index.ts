@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import OpenAI from 'npm:openai'
+import OpenAI from 'npm:openai@4'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
@@ -238,13 +238,26 @@ Deno.serve(async (req) => {
           }
 
           // Check token quota
-          const { data: quota } = await supabase
-            .from('usage_quotas')
-            .select(
-              'id, is_blocked, current_month_usage, monthly_token_limit, cost_per_1k_tokens, alert_80_sent_at',
-            )
-            .eq('user_id', config.user_id)
-            .single()
+          let quota = null
+          try {
+            const { data, error } = await supabase
+              .from('usage_quotas')
+              .select(
+                'id, is_blocked, current_month_usage, monthly_token_limit, cost_per_1k_tokens, alert_80_sent_at',
+              )
+              .eq('user_id', config.user_id)
+              .single()
+            if (error && error.code !== 'PGRST116') throw error // Ignore not found error as it might not exist
+            quota = data
+          } catch (dbError: any) {
+            await supabase.from('execution_logs').insert({
+              user_id: config.user_id,
+              level: 'error',
+              message: 'Erro ao verificar quotas de uso',
+              details: { error: dbError.message || dbError },
+            })
+          }
+
           if (
             quota &&
             (quota.is_blocked || quota.current_month_usage >= quota.monthly_token_limit)
