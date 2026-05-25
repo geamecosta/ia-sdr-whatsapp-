@@ -21,6 +21,7 @@ export type Database = {
           user_id: string
           welcome_message_content: string | null
           welcome_message_enabled: boolean | null
+          whatsapp_config_id: string | null
         }
         Insert: {
           company_objectives?: string | null
@@ -33,6 +34,7 @@ export type Database = {
           user_id: string
           welcome_message_content?: string | null
           welcome_message_enabled?: boolean | null
+          whatsapp_config_id?: string | null
         }
         Update: {
           company_objectives?: string | null
@@ -45,8 +47,17 @@ export type Database = {
           user_id?: string
           welcome_message_content?: string | null
           welcome_message_enabled?: boolean | null
+          whatsapp_config_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'company_settings_whatsapp_config_id_fkey'
+            columns: ['whatsapp_config_id']
+            isOneToOne: false
+            referencedRelation: 'whatsapp_configs'
+            referencedColumns: ['id']
+          },
+        ]
       }
       execution_logs: {
         Row: {
@@ -227,6 +238,7 @@ export type Database = {
       whatsapp_configs: {
         Row: {
           access_token: string | null
+          chatguru_account_id: string | null
           connection_type: string
           created_at: string
           id: string
@@ -241,6 +253,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          chatguru_account_id?: string | null
           connection_type?: string
           created_at?: string
           id?: string
@@ -255,6 +268,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          chatguru_account_id?: string | null
           connection_type?: string
           created_at?: string
           id?: string
@@ -430,6 +444,7 @@ export const Constants = {
 //   updated_at: timestamp with time zone (not null, default: now())
 //   welcome_message_enabled: boolean (nullable, default: false)
 //   welcome_message_content: text (nullable)
+//   whatsapp_config_id: uuid (nullable)
 // Table: execution_logs
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -487,12 +502,13 @@ export const Constants = {
 //   web_api_key: text (nullable)
 //   status: text (nullable, default: 'disconnected'::text)
 //   last_heartbeat: timestamp with time zone (nullable)
+//   chatguru_account_id: text (nullable)
 
 // --- CONSTRAINTS ---
 // Table: company_settings
 //   PRIMARY KEY company_settings_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY company_settings_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-//   UNIQUE company_settings_user_id_key: UNIQUE (user_id)
+//   FOREIGN KEY company_settings_whatsapp_config_id_fkey: FOREIGN KEY (whatsapp_config_id) REFERENCES whatsapp_configs(id) ON DELETE CASCADE
 // Table: execution_logs
 //   PRIMARY KEY execution_logs_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY execution_logs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
@@ -516,7 +532,6 @@ export const Constants = {
 // Table: whatsapp_configs
 //   PRIMARY KEY whatsapp_configs_pkey: PRIMARY KEY (id)
 //   FOREIGN KEY whatsapp_configs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-//   UNIQUE whatsapp_configs_user_id_key: UNIQUE (user_id)
 
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: company_settings
@@ -596,7 +611,7 @@ export const Constants = {
 
 // --- INDEXES ---
 // Table: company_settings
-//   CREATE UNIQUE INDEX company_settings_user_id_key ON public.company_settings USING btree (user_id)
+//   CREATE UNIQUE INDEX company_settings_user_config_idx ON public.company_settings USING btree (user_id, COALESCE(whatsapp_config_id, '00000000-0000-0000-0000-000000000000'::uuid))
 // Table: execution_logs
 //   CREATE INDEX execution_logs_created_at_idx ON public.execution_logs USING btree (created_at DESC)
 //   CREATE INDEX execution_logs_user_id_idx ON public.execution_logs USING btree (user_id)
@@ -608,4 +623,4 @@ export const Constants = {
 // Table: usage_quotas
 //   CREATE UNIQUE INDEX usage_quotas_user_id_key ON public.usage_quotas USING btree (user_id)
 // Table: whatsapp_configs
-//   CREATE UNIQUE INDEX whatsapp_configs_user_id_key ON public.whatsapp_configs USING btree (user_id)
+//   CREATE UNIQUE INDEX whatsapp_configs_user_device_idx ON public.whatsapp_configs USING btree (user_id, connection_type, COALESCE(web_instance_id, ''::text), COALESCE(phone_number_id, ''::text))
