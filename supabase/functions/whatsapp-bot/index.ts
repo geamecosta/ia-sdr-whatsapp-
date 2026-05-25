@@ -236,6 +236,25 @@ Deno.serve(async (req) => {
           continue
         }
 
+        // Check token quota
+        const { data: quota } = await supabase
+          .from('usage_quotas')
+          .select('is_blocked, current_month_usage, monthly_token_limit')
+          .eq('user_id', config.user_id)
+          .single()
+        if (quota && (quota.is_blocked || quota.current_month_usage >= quota.monthly_token_limit)) {
+          const blockedText =
+            'No momento, nosso assistente virtual está indisponível. Aguarde que um humano assumirá o atendimento.'
+          await supabase.from('execution_logs').insert({
+            user_id: config.user_id,
+            level: 'warning',
+            message: 'Geração bloqueada: limite de tokens excedido ou conta bloqueada',
+            details: { leadId, usage: quota.current_month_usage, limit: quota.monthly_token_limit },
+          })
+          await sendWhatsAppMessage(event, config, blockedText, event.fromPhone, supabase)
+          continue
+        }
+
         // Welcome Message Logic
         if (isNewLead && settings?.welcome_message_enabled && settings?.welcome_message_content) {
           const welcomeText = settings.welcome_message_content
@@ -292,6 +311,29 @@ Deno.serve(async (req) => {
             aiResponseText =
               completion.choices[0]?.message?.content ||
               'Desculpe, não consegui processar sua mensagem.'
+
+            // Log Token Usage
+            const usage = completion.usage
+            if (usage) {
+              const promptTokens = usage.prompt_tokens || 0
+              const completionTokens = usage.completion_tokens || 0
+              const totalTokens = usage.total_tokens || 0
+              const costEstimate =
+                (promptTokens / 1000000) * 0.15 + (completionTokens / 1000000) * 0.6
+
+              await supabase.from('usage_logs').insert({
+                user_id: config.user_id,
+                tokens_prompt: promptTokens,
+                tokens_completion: completionTokens,
+                total_tokens: totalTokens,
+                cost_estimate: costEstimate,
+              })
+
+              await supabase.rpc('increment_usage', {
+                p_user_id: config.user_id,
+                p_tokens: totalTokens,
+              })
+            }
           } else {
             aiResponseText = `Olá, ${event.senderName}! Recebemos: "${event.msgText}".\n\n[Aviso: Chave da OpenAI não configurada. Simulação Ativa]\nTom: "${settings?.tone_of_voice || 'Padrão'}"`
             await supabase.from('execution_logs').insert({
