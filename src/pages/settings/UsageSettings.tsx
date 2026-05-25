@@ -154,10 +154,35 @@ export function UsageSettings() {
           </div>
         </div>
 
-        <Button onClick={handleSave} disabled={saving} className="mt-4">
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Salvar Alterações
-        </Button>
+        <div className="flex gap-4 mt-4">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar Alterações
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!confirm('Tem certeza que deseja zerar seu uso atual?')) return
+              const { error } = await supabase
+                .from('usage_quotas')
+                .update({ current_month_usage: 0 })
+                .eq('user_id', user!.id)
+              if (!error) {
+                toast({ title: 'Sucesso', description: 'Uso resetado com sucesso.' })
+                setCurrentUsage(0)
+              } else {
+                toast({
+                  title: 'Erro',
+                  description: 'Falha ao resetar o uso.',
+                  variant: 'destructive',
+                })
+              }
+            }}
+          >
+            Resetar Uso Atual
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

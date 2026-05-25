@@ -254,11 +254,12 @@ Deno.serve(async (req) => {
             await supabase.from('execution_logs').insert({
               user_id: config.user_id,
               level: 'warning',
-              message: 'Blocked: Quota Exceeded',
+              message: `Quota exceeded for user ${config.user_id}`,
               details: {
                 leadId,
                 usage: quota.current_month_usage,
                 limit: quota.monthly_token_limit,
+                isBlocked: quota.is_blocked,
               },
             })
             await sendWhatsAppMessage(event, config, blockedText, event.fromPhone, supabase)
@@ -405,7 +406,7 @@ Deno.serve(async (req) => {
             await supabase.from('execution_logs').insert({
               user_id: config.user_id,
               level: 'error',
-              message: `Erro ao gerar resposta com AI`,
+              message: `OpenAI API Error`,
               details: { error: error.message || error.toString() },
             })
           }
@@ -499,8 +500,8 @@ async function sendWhatsAppMessage(
       await supabaseClient.from('execution_logs').insert({
         user_id: config.user_id,
         level: 'error',
-        message: `Erro de conexão ao enviar mensagem para ${to}`,
-        details: { error_data: errData, connection: true },
+        message: `Database Connection Error / WhatsApp API Error`,
+        details: { error_data: errData, connection: true, to },
       })
       await supabaseClient
         .from('whatsapp_configs')
@@ -542,8 +543,8 @@ async function sendWhatsAppMessage(
         await supabaseClient.from('execution_logs').insert({
           user_id: config.user_id,
           level: 'error',
-          message: `Erro ao enviar mensagem via ChatGuru para ${to}`,
-          details: { error_data: errData, connection: true },
+          message: `Database Connection Error / ChatGuru API Error`,
+          details: { error_data: errData, connection: true, to },
         })
         await supabaseClient
           .from('whatsapp_configs')
@@ -554,7 +555,7 @@ async function sendWhatsAppMessage(
       await supabaseClient.from('execution_logs').insert({
         user_id: config.user_id,
         level: 'error',
-        message: `Falha de rede ao contatar ChatGuru`,
+        message: `Database Connection Error`,
         details: { error: e.message },
       })
     }

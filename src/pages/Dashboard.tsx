@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ leads: 0, messagesReceived: 0, aiActivity: 0 })
   const [recentLogs, setRecentLogs] = useState<any[]>([])
   const [userQuota, setUserQuota] = useState<any>(null)
+  const [botStatus, setBotStatus] = useState<any>({ status: 'disconnected' })
 
   // Admin Stats
   const [adminStats, setAdminStats] = useState({
@@ -90,16 +91,28 @@ export default function Dashboard() {
         })
         setClientQuotas(quotas || [])
       } else {
-        const [{ count: leads }, { data: logs }, { data: quota }] = await Promise.all([
-          supabase.from('leads').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-          supabase
-            .from('execution_logs')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(5),
-          supabase.from('usage_quotas').select('*').eq('user_id', user.id).single(),
-        ])
+        const [{ count: leads }, { data: logs }, { data: quota }, { data: config }] =
+          await Promise.all([
+            supabase
+              .from('leads')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id),
+            supabase
+              .from('execution_logs')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(5),
+            supabase.from('usage_quotas').select('*').eq('user_id', user.id).single(),
+            supabase
+              .from('whatsapp_configs')
+              .select('status, connection_type')
+              .eq('user_id', user.id)
+              .maybeSingle(),
+          ])
+        if (config) {
+          setBotStatus(config)
+        }
 
         let receivedMsgs = 0
         let aiMsgs = 0
@@ -153,17 +166,31 @@ export default function Dashboard() {
     }
   }
 
-  const handleUpdateLimit = async (userId: string, newLimit: number) => {
+  const handleUpdateLimit = async (userId: string, newLimit: number, newCost: number) => {
     try {
       const { error } = await supabase
         .from('usage_quotas')
-        .update({ monthly_token_limit: newLimit })
+        .update({ monthly_token_limit: newLimit, cost_per_1k_tokens: newCost })
         .eq('user_id', userId)
       if (error) throw error
-      toast.success('Limite atualizado com sucesso.')
+      toast.success('Valores atualizados com sucesso.')
       fetchDashboardData()
     } catch (e: any) {
-      toast.error('Erro ao atualizar limite: ' + e.message)
+      toast.error('Erro ao atualizar valores: ' + e.message)
+    }
+  }
+
+  const handleResetUsage = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('usage_quotas')
+        .update({ current_month_usage: 0 })
+        .eq('user_id', userId)
+      if (error) throw error
+      toast.success('Uso resetado com sucesso.')
+      fetchDashboardData()
+    } catch (e: any) {
+      toast.error('Erro ao resetar uso: ' + e.message)
     }
   }
 
@@ -182,6 +209,24 @@ export default function Dashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard Financeiro</h1>
           <p className="text-muted-foreground">Visão geral do consumo de IA e controle de cotas.</p>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 mb-6 items-start md:items-center justify-between p-4 bg-muted/30 rounded-lg border">
+          <div>
+            <h2 className="text-lg font-semibold">Bot Status & Diagnostic</h2>
+            <p className="text-sm text-muted-foreground">
+              Estado atual da sua conexão com o WhatsApp e IA.
+            </p>
+          </div>
+          <div
+            className={cn(
+              'flex items-center gap-2 px-3 py-1.5 rounded-full font-medium text-sm',
+              derivedBotStatusColor,
+            )}
+          >
+            {derivedBotStatusIcon}
+            {derivedBotStatus}
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
@@ -303,6 +348,14 @@ export default function Dashboard() {
                               />
                             </div>
                             <UpdateLimitDialog client={client} onUpdate={handleUpdateLimit} />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleResetUsage(client.user_id)}
+                              title="Resetar Uso Atual"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -333,6 +386,28 @@ export default function Dashboard() {
     userQuota && userQuota.monthly_token_limit > 0
       ? Math.min((userQuota.current_month_usage / userQuota.monthly_token_limit) * 100, 100)
       : 0
+
+  let derivedBotStatus = 'Disconnected'
+  let derivedBotStatusColor = 'bg-muted text-muted-foreground'
+  let derivedBotStatusIcon = <Info className="h-4 w-4" />
+
+  if (userQuota?.is_blocked) {
+    derivedBotStatus = 'Blocked (Administrativo)'
+    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
+    derivedBotStatusIcon = <Ban className="h-4 w-4" />
+  } else if (userQuota && userQuota.current_month_usage >= userQuota.monthly_token_limit) {
+    derivedBotStatus = 'Blocked (Out of Credits)'
+    derivedBotStatusColor = 'bg-destructive/10 text-destructive'
+    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
+  } else if (botStatus.status === 'error') {
+    derivedBotStatus = 'Error (Technical Issue)'
+    derivedBotStatusColor = 'bg-yellow-500/10 text-yellow-600'
+    derivedBotStatusIcon = <AlertCircle className="h-4 w-4" />
+  } else if (botStatus.status === 'connected') {
+    derivedBotStatus = 'Active'
+    derivedBotStatusColor = 'bg-green-500/10 text-green-600'
+    derivedBotStatusIcon = <CheckCircle2 className="h-4 w-4" />
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
@@ -450,13 +525,14 @@ function UpdateLimitDialog({
   onUpdate,
 }: {
   client: any
-  onUpdate: (id: string, limit: number) => void
+  onUpdate: (id: string, limit: number, cost: number) => void
 }) {
-  const [limit, setLimit] = useState(client.monthly_token_limit.toString())
+  const [limit, setLimit] = useState(client.monthly_token_limit?.toString() || '0')
+  const [cost, setCost] = useState(client.cost_per_1k_tokens?.toString() || '0.02')
   const [open, setOpen] = useState(false)
 
   const handleSave = () => {
-    onUpdate(client.user_id, parseInt(limit, 10))
+    onUpdate(client.user_id, parseInt(limit, 10), parseFloat(cost))
     setOpen(false)
   }
 
@@ -469,18 +545,31 @@ function UpdateLimitDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Editar Limite de Tokens</DialogTitle>
+          <DialogTitle>Editar Cota e Custos</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="limit" className="text-right">
-              Limite (Mês)
+              Limite
             </Label>
             <Input
               id="limit"
               type="number"
               value={limit}
               onChange={(e) => setLimit(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cost" className="text-right">
+              Custo / 1k ($)
+            </Label>
+            <Input
+              id="cost"
+              type="number"
+              step="0.001"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
               className="col-span-3"
             />
           </div>

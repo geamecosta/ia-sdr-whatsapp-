@@ -17,7 +17,7 @@ export default function Logs() {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(20)
 
       if (data) setLogs(data)
       setLoading(false)
@@ -35,7 +35,7 @@ export default function Logs() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          setLogs((current) => [payload.new, ...current].slice(0, 100))
+          setLogs((current) => [payload.new, ...current].slice(0, 20))
         },
       )
       .subscribe()
@@ -74,7 +74,7 @@ export default function Logs() {
       <Card>
         <CardHeader>
           <CardTitle>Últimos Eventos</CardTitle>
-          <CardDescription>Exibindo os 100 logs mais recentes.</CardDescription>
+          <CardDescription>Exibindo os 20 logs mais recentes.</CardDescription>
         </CardHeader>
         <CardContent>
           {logs.length === 0 ? (
