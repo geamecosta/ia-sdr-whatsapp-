@@ -1,9 +1,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import OpenAI from 'openai'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const supabase = createClient(supabaseUrl, supabaseKey)
+const openAiKey = Deno.env.get('OPENAI_API_KEY') || ''
 
 Deno.serve(async (req) => {
   if (req.method === 'GET') {
@@ -142,18 +144,18 @@ Deno.serve(async (req) => {
           .update({ status: 'connected', last_heartbeat: new Date().toISOString() })
           .eq('user_id', config.user_id)
 
+        await supabase.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'info',
+          message: `Request Received: Mensagem de ${event.senderName} (${event.fromPhone}) via ${event.type}`,
+          details: { text: event.msgText, msgId: event.msgId },
+        })
+
         const { data: settings } = await supabase
           .from('company_settings')
           .select('*')
           .eq('user_id', config.user_id)
           .single()
-
-        await supabase.from('execution_logs').insert({
-          user_id: config.user_id,
-          level: 'info',
-          message: `Mensagem recebida de ${event.senderName} (${event.fromPhone}) via ${event.type}`,
-          details: { text: event.msgText, msgId: event.msgId },
-        })
 
         let leadId: string | null = null
         let isNewLead = false
@@ -199,6 +201,13 @@ Deno.serve(async (req) => {
 
         if (!leadId) continue
 
+        await supabase.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'info',
+          message: `Lead Identified: ${isNewLead ? 'Novo' : 'Existente'} lead (${event.fromPhone})`,
+          details: { leadId },
+        })
+
         // Save incoming user message with idempotency using provider_message_id
         const { error: msgInsertError } = await supabase.from('messages').insert({
           lead_id: leadId,
@@ -225,13 +234,73 @@ Deno.serve(async (req) => {
           await sendWhatsAppMessage(event, config, welcomeText, event.fromPhone, supabase)
         }
 
-        // Send AI response
-        const aiResponseText = `Olá, ${event.senderName}! Recebemos: "${event.msgText}". [Simulação SDR - Tom: "${settings?.tone_of_voice || 'Padrão'}"]`
+        // Generate AI response
+        let aiResponseText = ''
+
+        try {
+          if (openAiKey) {
+            const openai = new OpenAI({ apiKey: openAiKey })
+
+            const { data: recentMessages } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('lead_id', leadId)
+              .order('created_at', { ascending: false })
+              .limit(15)
+
+            const messageHistory = (recentMessages || []).reverse().map((m: any) => ({
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: m.content,
+            }))
+
+            const systemPrompt =
+              settings?.system_prompt || 'Você é um assistente virtual de vendas útil e prestativo.'
+            const tone = settings?.tone_of_voice || 'Profissional e educado'
+            const manual = settings?.sales_manual || 'Nenhuma informação adicional fornecida.'
+            const companyObjectives = settings?.company_objectives || 'Atender bem os clientes.'
+
+            const fullSystemPrompt = `${systemPrompt}\n\nTom de Voz: ${tone}\nObjetivos: ${companyObjectives}\n\nManual de Vendas / Informações da Empresa:\n${manual}`
+
+            // @ts-ignore
+            const completion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'system', content: fullSystemPrompt }, ...messageHistory],
+            })
+
+            aiResponseText =
+              completion.choices[0]?.message?.content ||
+              'Desculpe, não consegui processar sua mensagem.'
+          } else {
+            aiResponseText = `Olá, ${event.senderName}! Recebemos: "${event.msgText}".\n\n[Aviso: Chave da OpenAI não configurada. Simulação Ativa]\nTom: "${settings?.tone_of_voice || 'Padrão'}"`
+          }
+        } catch (error: any) {
+          aiResponseText = `Olá! Recebi sua mensagem, mas ocorreu um erro temporário no processamento da AI.`
+          await supabase.from('execution_logs').insert({
+            user_id: config.user_id,
+            level: 'error',
+            message: `Erro ao gerar resposta com AI`,
+            details: { error: error.message },
+          })
+        }
+
+        await supabase.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'info',
+          message: `AI Response Generated`,
+          details: { responseText: aiResponseText },
+        })
 
         await supabase.from('messages').insert({
           lead_id: leadId,
           role: 'assistant',
           content: aiResponseText,
+        })
+
+        await supabase.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'info',
+          message: `API Call Sent: Enviando resposta para o provedor ${event.type}`,
+          details: { leadId },
         })
 
         await sendWhatsAppMessage(event, config, aiResponseText, event.fromPhone, supabase)
