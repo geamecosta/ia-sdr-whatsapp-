@@ -83,9 +83,6 @@ export function WhatsappSettings() {
     if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
       normalizedUrl = 'https://' + normalizedUrl
     }
-    if (normalizedUrl.endsWith('/')) {
-      normalizedUrl = normalizedUrl.slice(0, -1)
-    }
     setCgEndpointUrl(normalizedUrl)
 
     try {

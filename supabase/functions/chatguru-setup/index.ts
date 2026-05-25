@@ -13,9 +13,6 @@ function normalizeUrl(url: string) {
   if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
     normalized = 'https://' + normalized
   }
-  if (normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1)
-  }
   return normalized
 }
 
@@ -90,7 +87,7 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // Attempt 1: Headers
+        // Attempt 1: POST with Headers
         let chatGuruUrl = baseListUrl
         let requestHeaders: Record<string, string> = {
           Accept: 'application/json',
@@ -98,15 +95,15 @@ Deno.serve(async (req) => {
           'X-API-KEY': web_api_key,
           'X-ACCOUNT-ID': chatguru_account_id,
         }
-
+        let methodUsed = 'POST'
         let response = await fetch(chatGuruUrl, {
-          method: 'GET',
+          method: methodUsed,
           headers: requestHeaders,
         })
         let text = await response.text()
         let statusCode = response.status
 
-        // If Attempt 1 fails, try Attempt 2: Query Parameters
+        // If Attempt 1 fails, try Attempt 2: Query Parameters with POST
         if (
           statusCode >= 400 ||
           (text && text.toLowerCase().includes('unauthorized')) ||
@@ -119,12 +116,27 @@ Deno.serve(async (req) => {
             Accept: 'application/json',
             Authorization: web_api_key,
           }
+          methodUsed = 'POST'
           response = await fetch(chatGuruUrl, {
-            method: 'GET',
+            method: methodUsed,
             headers: requestHeaders,
           })
           text = await response.text()
           statusCode = response.status
+
+          // If POST still fails, fallback to GET (some instances might need GET)
+          if (
+            statusCode >= 400 ||
+            (text && text.toLowerCase().includes('m\u00e9todo inv\u00e1lido'))
+          ) {
+            methodUsed = 'GET'
+            response = await fetch(chatGuruUrl, {
+              method: methodUsed,
+              headers: requestHeaders,
+            })
+            text = await response.text()
+            statusCode = response.status
+          }
         }
 
         if (statusCode >= 400 || !response.ok) {
@@ -135,6 +147,7 @@ Deno.serve(async (req) => {
             message: 'ChatGuru Connection Failure',
             details: {
               request_url: maskedUrl,
+              method: methodUsed,
               sent_params: { account_id: chatguru_account_id, has_api_key: !!web_api_key },
               raw_response_body: text,
               statusCode,
