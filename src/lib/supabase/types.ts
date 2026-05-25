@@ -591,8 +591,26 @@ export const Constants = {
 //   Policy "Users can manage own company_settings" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
+//   Policy "company_settings_delete" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "company_settings_insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "company_settings_select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "company_settings_update" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
 // Table: execution_logs
 //   Policy "Users can manage own execution_logs" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "execution_logs_delete" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "execution_logs_insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "execution_logs_select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "execution_logs_update" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
 // Table: leads
@@ -605,6 +623,15 @@ export const Constants = {
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
 // Table: persona_templates
 //   Policy "Users can manage own persona_templates" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "persona_templates_delete" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "persona_templates_insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "persona_templates_select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "persona_templates_update" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
 // Table: profiles
@@ -629,6 +656,15 @@ export const Constants = {
 //     USING: ((auth.uid() = user_id) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true)))))
 // Table: whatsapp_configs
 //   Policy "Users can manage own whatsapp_configs" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "whatsapp_configs_delete" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "whatsapp_configs_insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: (auth.uid() = user_id)
+//   Policy "whatsapp_configs_select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//   Policy "whatsapp_configs_update" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
 

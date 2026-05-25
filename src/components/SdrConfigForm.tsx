@@ -95,17 +95,33 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
       updated_at: new Date().toISOString(),
     }
 
-    if (hasExisting) {
+    const { error } = await (supabase.rpc as any)('upsert_company_settings', {
+      p_user_id: user.id,
+      p_whatsapp_config_id: whatsappConfigId || null,
+      p_system_prompt: settings.system_prompt || '',
+      p_tone_of_voice: settings.tone_of_voice || '',
+      p_company_objectives: settings.company_objectives || '',
+      p_sales_manual: settings.sales_manual || '',
+      p_welcome_message_enabled: settings.welcome_message_enabled || false,
+      p_welcome_message_content: settings.welcome_message_content || '',
+    })
+
+    if (error) {
+      // Se a função RPC falhar (por exemplo, antes de aplicarem a migração),
+      // fazemos o fallback para a lógica anterior para não quebrar a aplicação imediatamente.
       let updateQuery = supabase.from('company_settings').update(payload).eq('user_id', user.id)
+      if (whatsappConfigId) updateQuery = updateQuery.eq('whatsapp_config_id', whatsappConfigId)
+      else updateQuery = updateQuery.is('whatsapp_config_id', null)
 
-      if (whatsappConfigId) {
-        updateQuery = updateQuery.eq('whatsapp_config_id', whatsappConfigId)
-      } else {
-        updateQuery = updateQuery.is('whatsapp_config_id', null)
-      }
+      const { error: fallbackError } = hasExisting
+        ? await updateQuery
+        : await supabase.from('company_settings').insert({
+            ...payload,
+            user_id: user.id,
+            whatsapp_config_id: whatsappConfigId,
+          })
 
-      const { error } = await updateQuery
-      if (error) {
+      if (fallbackError) {
         toast({
           title: 'Erro',
           description: 'Falha ao salvar configurações.',
@@ -113,25 +129,13 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
         })
       } else {
         toast({ title: 'Sucesso', description: 'Configurações salvas com sucesso.' })
-        if (onSaved) onSaved()
-      }
-    } else {
-      const { error } = await supabase.from('company_settings').insert({
-        ...payload,
-        user_id: user.id,
-        whatsapp_config_id: whatsappConfigId,
-      })
-      if (error) {
-        toast({
-          title: 'Erro',
-          description: 'Falha ao salvar configurações.',
-          variant: 'destructive',
-        })
-      } else {
-        toast({ title: 'Sucesso', description: 'Configurações criadas com sucesso.' })
         setHasExisting(true)
         if (onSaved) onSaved()
       }
+    } else {
+      toast({ title: 'Sucesso', description: 'Configurações salvas com sucesso.' })
+      setHasExisting(true)
+      if (onSaved) onSaved()
     }
     setSaving(false)
   }

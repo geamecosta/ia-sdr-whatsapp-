@@ -133,13 +133,19 @@ Deno.serve(async (req) => {
 
     // Endpoint Normalization
     let baseUrl = parsedUrl.origin
-    if (parsedUrl.pathname && parsedUrl.pathname !== '/' && parsedUrl.pathname !== '/api/v1') {
-      let path = parsedUrl.pathname
-      if (path.endsWith('/')) path = path.slice(0, -1)
-      baseUrl += path
+    let path = parsedUrl.pathname
+
+    if (!path || path === '/') {
+      path = '/api/v1'
+    }
+    if (path.endsWith('/')) {
+      path = path.slice(0, -1)
     }
 
-    let chatGuruUrl = `${baseUrl}/?action=webhook_config`
+    let chatGuruUrl = `${baseUrl}${path}`
+    if (!chatGuruUrl.includes('action=webhook_config')) {
+      chatGuruUrl += `${chatGuruUrl.includes('?') ? '&' : '?'}action=webhook_config`
+    }
 
     let response
     let requestHeaders: Record<string, string> = {
@@ -193,7 +199,7 @@ Deno.serve(async (req) => {
       await supabase.from('execution_logs').insert({
         user_id: user.id,
         level: 'error',
-        message: 'Erro de comunicação com o ChatGuru ao configurar Webhook',
+        message: 'Erro de comunicação com o ChatGuru',
         details: {
           endpoint: chatGuruUrl,
           statusCode: response?.status,
@@ -222,8 +228,9 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Erro de comunicação com o ChatGuru ao configurar Webhook',
+          error: 'Erro de comunicação com o ChatGuru',
           details: errorMessage,
+          statusCode: response?.status,
         }),
         {
           status: response.status >= 400 ? response.status : 400,

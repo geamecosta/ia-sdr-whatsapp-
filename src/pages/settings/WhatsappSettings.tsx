@@ -206,17 +206,26 @@ export function WhatsappSettings() {
       } else {
         const detailsStr = String(json.details || '')
         const isHtml = detailsStr.toLowerCase().includes('<html')
-        const errDesc = isHtml
+        let errDesc = isHtml
           ? 'O servidor retornou uma página inválida. Consulte os Logs.'
           : detailsStr.substring(0, 150) || 'Erro de comunicação. Consulte os Logs.'
 
+        if (
+          res.status === 404 ||
+          res.status === 405 ||
+          json.statusCode === 404 ||
+          json.statusCode === 405
+        ) {
+          errDesc = `O endpoint do ChatGuru retornou ${json.statusCode || res.status}. Verifique a URL e consulte os Logs do Sistema.`
+        }
+
         toast({
-          title: 'Erro',
+          title: 'Erro de Comunicação',
           description: errDesc,
           variant: 'destructive',
           action: (
-            <ToastAction altText="Ver Detalhes Técnicos" onClick={() => navigate('/logs')}>
-              Detalhes Técnicos
+            <ToastAction altText="Ver Logs" onClick={() => navigate('/logs')}>
+              Logs do Sistema
             </ToastAction>
           ),
         })
