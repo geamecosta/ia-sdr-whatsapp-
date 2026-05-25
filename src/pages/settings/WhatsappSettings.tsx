@@ -78,8 +78,18 @@ export function WhatsappSettings() {
       })
       return
     }
+
+    let normalizedUrl = cgEndpointUrl.trim()
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      normalizedUrl = 'https://' + normalizedUrl
+    }
+    if (normalizedUrl.endsWith('/')) {
+      normalizedUrl = normalizedUrl.slice(0, -1)
+    }
+    setCgEndpointUrl(normalizedUrl)
+
     try {
-      new URL(cgEndpointUrl)
+      new URL(normalizedUrl)
     } catch {
       toast({ title: 'Erro', description: 'URL da API inválida', variant: 'destructive' })
       return
@@ -119,7 +129,20 @@ export function WhatsappSettings() {
         }
       } else {
         let errorMsg = json.error || 'Falha ao buscar aparelhos'
-        if (res.status === 401 || res.status === 403) {
+        if (json.details && typeof json.details === 'string' && json.details.trim() !== '') {
+          try {
+            const parsed = JSON.parse(json.details)
+            if (parsed.description) {
+              errorMsg = `Erro: ${parsed.description}`
+            } else if (parsed.message) {
+              errorMsg = `Erro: ${parsed.message}`
+            } else {
+              errorMsg += ` (${json.details.substring(0, 100)})`
+            }
+          } catch {
+            errorMsg += ` (${json.details.substring(0, 100)})`
+          }
+        } else if (res.status === 401 || res.status === 403) {
           errorMsg = 'Credenciais inválidas: Verifique seu Account ID e API Key.'
         } else if (res.status === 400 || res.status === 404) {
           errorMsg = 'URL do Endpoint inválida ou não suportada.'

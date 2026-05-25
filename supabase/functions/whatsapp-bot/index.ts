@@ -543,12 +543,14 @@ async function sendWhatsAppMessage(
     }
     // Envio via ChatGuru API
     try {
-      const endpoint = config.chatguru_endpoint_url
-        ? config.chatguru_endpoint_url.endsWith('/')
-          ? config.chatguru_endpoint_url.slice(0, -1)
-          : config.chatguru_endpoint_url
-        : 'https://chatguru.app/api/v1'
-      const cgResponse = await fetch(`${endpoint}?action=send_message`, {
+      let endpoint = config.chatguru_endpoint_url || 'https://chatguru.app/api/v1'
+      endpoint = endpoint.trim()
+      if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://'))
+        endpoint = 'https://' + endpoint
+      if (endpoint.endsWith('/')) endpoint = endpoint.slice(0, -1)
+
+      const separator = endpoint.includes('?') ? '&' : '?'
+      const cgResponse = await fetch(`${endpoint}${separator}action=send_message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
