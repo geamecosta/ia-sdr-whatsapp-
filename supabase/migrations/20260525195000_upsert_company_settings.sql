@@ -43,4 +43,4 @@ BEGIN
     welcome_message_content = EXCLUDED.welcome_message_content,
     updated_at = now();
 END;
-$;
+$$;
