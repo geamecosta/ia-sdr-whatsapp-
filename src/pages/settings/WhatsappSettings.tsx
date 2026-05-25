@@ -40,6 +40,7 @@ export function WhatsappSettings() {
   const [newType, setNewType] = useState('chatguru')
   const [cgAccountId, setCgAccountId] = useState('')
   const [cgApiKey, setCgApiKey] = useState('')
+  const [cgEndpointUrl, setCgEndpointUrl] = useState('')
   const [fetchingDevices, setFetchingDevices] = useState(false)
   const [fetchedDevices, setFetchedDevices] = useState<any[]>([])
 
@@ -69,8 +70,18 @@ export function WhatsappSettings() {
   }, [user])
 
   const handleFetchChatGuruDevices = async () => {
-    if (!cgAccountId || !cgApiKey) {
-      toast({ title: 'Erro', description: 'Preencha Account ID e API Key', variant: 'destructive' })
+    if (!cgAccountId || !cgApiKey || !cgEndpointUrl) {
+      toast({
+        title: 'Erro',
+        description: 'Preencha Account ID, API Key e URL da API',
+        variant: 'destructive',
+      })
+      return
+    }
+    try {
+      new URL(cgEndpointUrl)
+    } catch {
+      toast({ title: 'Erro', description: 'URL da API inválida', variant: 'destructive' })
       return
     }
     setFetchingDevices(true)
@@ -88,6 +99,7 @@ export function WhatsappSettings() {
           action: 'fetch_devices',
           chatguru_account_id: cgAccountId,
           web_api_key: cgApiKey,
+          chatguru_endpoint_url: cgEndpointUrl,
         }),
       })
       const json = await res.json()
@@ -127,9 +139,10 @@ export function WhatsappSettings() {
       chatguru_account_id: cgAccountId,
       web_api_key: cgApiKey,
       web_instance_id: device.id,
+      chatguru_endpoint_url: cgEndpointUrl,
       status: 'disconnected',
       verify_token: crypto.randomUUID(),
-    })
+    } as any)
 
     if (error) {
       if (error.code === '23505') {
@@ -261,6 +274,14 @@ export function WhatsappSettings() {
 
               {newType === 'chatguru' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <Label>URL da API (Endpoint)</Label>
+                    <Input
+                      value={cgEndpointUrl}
+                      onChange={(e) => setCgEndpointUrl(e.target.value)}
+                      placeholder="https://s01.chatguru.io/api/v1"
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label>Account ID</Label>
                     <Input
@@ -405,8 +426,13 @@ export function WhatsappSettings() {
                         {config.status === 'connected' ? 'Conectado' : 'Desconectado'}
                       </Badge>
                     </CardTitle>
-                    <CardDescription className="mt-1 break-all">
-                      ID: {config.web_instance_id || config.phone_number_id || 'N/A'}
+                    <CardDescription className="mt-1 break-all flex flex-col gap-1">
+                      <span>ID: {config.web_instance_id || config.phone_number_id || 'N/A'}</span>
+                      {config.connection_type === 'chatguru' && config.chatguru_endpoint_url && (
+                        <span className="text-xs opacity-80">
+                          API: {config.chatguru_endpoint_url}
+                        </span>
+                      )}
                     </CardDescription>
                   </div>
                   <Button

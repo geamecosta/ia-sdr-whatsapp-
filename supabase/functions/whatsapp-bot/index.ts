@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
         let configQuery = supabase
           .from('whatsapp_configs')
           .select(
-            'user_id, access_token, web_api_key, web_instance_id, connection_type, verify_token',
+            'user_id, access_token, web_api_key, web_instance_id, connection_type, verify_token, chatguru_endpoint_url',
           )
         if (event.type === 'official') {
           configQuery = configQuery.eq('phone_number_id', event.phoneNumberId).single()
@@ -543,7 +543,12 @@ async function sendWhatsAppMessage(
     }
     // Envio via ChatGuru API
     try {
-      const cgResponse = await fetch(`https://chatguru.app/api/v1?action=send_message`, {
+      const endpoint = config.chatguru_endpoint_url
+        ? config.chatguru_endpoint_url.endsWith('/')
+          ? config.chatguru_endpoint_url.slice(0, -1)
+          : config.chatguru_endpoint_url
+        : 'https://chatguru.app/api/v1'
+      const cgResponse = await fetch(`${endpoint}?action=send_message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

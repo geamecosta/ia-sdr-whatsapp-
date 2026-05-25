@@ -55,24 +55,38 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'fetch_devices') {
-      const { web_api_key, chatguru_account_id } = body
-      if (!web_api_key || !chatguru_account_id) {
-        return new Response(JSON.stringify({ success: false, error: 'Credenciais ausentes' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+      const { web_api_key, chatguru_account_id, chatguru_endpoint_url } = body
+      if (!web_api_key || !chatguru_account_id || !chatguru_endpoint_url) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Credenciais ou Endpoint URL ausentes' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        )
       }
 
       // Call ChatGuru API to list devices
       let devices = []
       try {
-        const chatGuruUrl = `https://chatguru.app/api/v1?action=phones&key=${web_api_key}&account_id=${chatguru_account_id}`
+        const endpoint = chatguru_endpoint_url.endsWith('/')
+          ? chatguru_endpoint_url.slice(0, -1)
+          : chatguru_endpoint_url
+        const chatGuruUrl = `${endpoint}?action=phones&key=${web_api_key}&account_id=${chatguru_account_id}`
         const response = await fetch(chatGuruUrl)
         const text = await response.text()
         let result
         try {
           result = JSON.parse(text)
         } catch (e) {
+          if (response.status === 404 || text.toLowerCase().includes('not found')) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error:
+                  'Falha ao conectar ao Endpoint informado. Verifique a URL e tente novamente.',
+                details: `Status ${response.status}`,
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            )
+          }
           if (
             response.status === 401 ||
             response.status === 403 ||
@@ -160,7 +174,7 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'Falha ao buscar aparelhos na API do ChatGuru.',
+            error: 'Falha ao conectar ao Endpoint informado. Verifique a URL e tente novamente.',
             details: e.message,
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -175,7 +189,9 @@ Deno.serve(async (req) => {
     const configId = body.config_id
     let configQuery = supabase
       .from('whatsapp_configs')
-      .select('id, web_api_key, web_instance_id, verify_token, chatguru_account_id')
+      .select(
+        'id, web_api_key, web_instance_id, verify_token, chatguru_account_id, chatguru_endpoint_url',
+      )
       .eq('user_id', user.id)
       .eq('connection_type', 'chatguru')
 
@@ -227,7 +243,12 @@ Deno.serve(async (req) => {
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}&token=${verifyToken}`
 
     // Tenta registrar o webhook usando a API do ChatGuru
-    const chatGuruUrl = `https://chatguru.app/api/v1?action=webhook_config`
+    const endpoint = config.chatguru_endpoint_url
+      ? config.chatguru_endpoint_url.endsWith('/')
+        ? config.chatguru_endpoint_url.slice(0, -1)
+        : config.chatguru_endpoint_url
+      : 'https://chatguru.app/api/v1'
+    const chatGuruUrl = `${endpoint}?action=webhook_config`
 
     let response
     try {
