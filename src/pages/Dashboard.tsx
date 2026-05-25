@@ -1,175 +1,85 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { db } from '@/services/db'
-import { supabase } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/use-auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { MessageCircle, Phone, Clock } from 'lucide-react'
+import { Activity, Users } from 'lucide-react'
 
 export default function Dashboard() {
-  const [leads, setLeads] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const { user } = useAuth()
+  const [stats, setStats] = useState({ leads: 0, messages: 0 })
+  const [recentLogs, setRecentLogs] = useState<any[]>([])
 
   useEffect(() => {
-    fetchLeads()
+    async function load() {
+      try {
+        const leadsData = await db.getLeads()
+        setStats((prev) => ({ ...prev, leads: leadsData.length }))
 
-    if (user) {
-      const channel = supabase
-        .channel('leads_changes')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'leads', filter: `user_id=eq.${user.id}` },
-          () => {
-            fetchLeads()
-          },
-        )
-        .subscribe()
-      return () => {
-        supabase.removeChannel(channel)
+        const logsData = await db.getLogs()
+        setRecentLogs(logsData.slice(0, 5))
+      } catch (err) {
+        console.error('Error loading dashboard data:', err)
       }
     }
-  }, [user])
-
-  const fetchLeads = async () => {
-    try {
-      const data = await db.getLeads()
-      setLeads(data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleStatusChange = async (leadId: string, status: string) => {
-    try {
-      await db.updateLeadStatus(leadId, status)
-      setLeads(leads.map((l) => (l.id === leadId ? { ...l, status } : l)))
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'novo':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'qualificando':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'interessado':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'reunião agendada':
-        return 'bg-purple-100 text-purple-800 border-purple-200'
-      case 'não interessado':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  if (loading) {
-    return <div className="p-8">Carregando leads...</div>
-  }
+    load()
+  }, [])
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leads Recentes</h1>
-          <p className="text-muted-foreground">
-            Monitore e gerencie os leads capturados pelo WhatsApp.
-          </p>
-        </div>
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Leads</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.leads}</div>
+            <p className="text-xs text-muted-foreground">Leads registrados no sistema</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Status do Assistente</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">Ativo</div>
+            <p className="text-xs text-muted-foreground">Pronto para responder</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" /> Todos os Leads
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {leads.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
-              <Phone className="h-12 w-12 mb-4 opacity-20" />
-              <p>Nenhum lead recebido ainda.</p>
-              <p className="text-sm mt-2">Certifique-se de configurar a integração do WhatsApp.</p>
-            </div>
-          ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Última Interação</TableHead>
-                    <TableHead className="text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leads.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell className="font-medium">{lead.name || 'Desconhecido'}</TableCell>
-                      <TableCell>{lead.phone_number}</TableCell>
-                      <TableCell>
-                        <Select
-                          value={lead.status}
-                          onValueChange={(val) => handleStatusChange(lead.id, val)}
-                        >
-                          <SelectTrigger
-                            className={`w-[160px] h-8 text-xs font-semibold ${getStatusColor(lead.status)}`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Novo">Novo</SelectItem>
-                            <SelectItem value="Qualificando">Qualificando</SelectItem>
-                            <SelectItem value="Interessado">Interessado</SelectItem>
-                            <SelectItem value="Reunião Agendada">Reunião Agendada</SelectItem>
-                            <SelectItem value="Não Interessado">Não Interessado</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        {new Date(lead.updated_at).toLocaleDateString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Link
-                          to={`/leads/${lead.id}`}
-                          className="text-primary hover:underline text-sm font-medium"
-                        >
-                          Ver Conversa
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <h2 className="text-xl font-semibold mt-8 mb-4">Atividade Recente</h2>
+      <div className="space-y-4">
+        {recentLogs.length > 0 ? (
+          recentLogs.map((log) => (
+            <Card key={log.id} className="bg-muted/50">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">{log.message}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(log.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div
+                  className={`px-2 py-1 text-xs rounded-full ${
+                    log.level === 'error'
+                      ? 'bg-destructive/10 text-destructive'
+                      : log.level === 'success'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'bg-secondary text-secondary-foreground'
+                  }`}
+                >
+                  {log.level}
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">Nenhuma atividade recente.</p>
+        )}
+      </div>
     </div>
   )
 }

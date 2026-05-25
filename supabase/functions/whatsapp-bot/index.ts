@@ -56,6 +56,14 @@ Deno.serve(async (req) => {
 
                 if (!msgText) continue
 
+                // Log incoming message
+                await supabase.from('execution_logs').insert({
+                  user_id: config.user_id,
+                  level: 'info',
+                  message: `Mensagem recebida de ${senderName} (${fromPhone})`,
+                  details: { text: msgText },
+                })
+
                 let { data: lead } = await supabase
                   .from('leads')
                   .select('*')
@@ -106,26 +114,46 @@ Deno.serve(async (req) => {
                 })
 
                 // Send reply via WhatsApp API
-                await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${config.access_token}`,
-                    'Content-Type': 'application/json',
+                const waResponse = await fetch(
+                  `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${config.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      messaging_product: 'whatsapp',
+                      to: fromPhone,
+                      type: 'text',
+                      text: { body: aiResponseText },
+                    }),
                   },
-                  body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    to: fromPhone,
-                    type: 'text',
-                    text: { body: aiResponseText },
-                  }),
-                })
+                )
+
+                if (waResponse.ok) {
+                  await supabase.from('execution_logs').insert({
+                    user_id: config.user_id,
+                    level: 'success',
+                    message: `Resposta enviada para ${senderName}`,
+                    details: { text: aiResponseText },
+                  })
+                } else {
+                  const errData = await waResponse.json().catch(() => ({}))
+                  await supabase.from('execution_logs').insert({
+                    user_id: config.user_id,
+                    level: 'error',
+                    message: `Erro ao enviar mensagem para ${senderName}`,
+                    details: errData,
+                  })
+                }
               }
             }
           }
         }
       }
       return new Response('OK', { status: 200 })
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
       return new Response('Error', { status: 500 })
     }

@@ -1,7 +1,7 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/use-auth'
 import { useEffect } from 'react'
-import { MessageSquare, Settings, Users, LogOut, Menu } from 'lucide-react'
+import { MessageSquare, Settings, Users, LogOut, Menu, Activity, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -37,8 +37,22 @@ export default function Layout() {
         to="/"
         className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname === '/' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
       >
+        <Activity className="h-5 w-5" />
+        Dashboard
+      </Link>
+      <Link
+        to="/leads"
+        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname.startsWith('/leads') ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+      >
         <Users className="h-5 w-5" />
         Leads
+      </Link>
+      <Link
+        to="/logs"
+        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname === '/logs' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+      >
+        <List className="h-5 w-5" />
+        Logs
       </Link>
       <Link
         to="/settings"

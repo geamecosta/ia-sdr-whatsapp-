@@ -9,7 +9,149 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      company_settings: {
+        Row: {
+          company_objectives: string | null
+          created_at: string
+          id: string
+          sales_manual: string | null
+          system_prompt: string | null
+          tone_of_voice: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_objectives?: string | null
+          created_at?: string
+          id?: string
+          sales_manual?: string | null
+          system_prompt?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_objectives?: string | null
+          created_at?: string
+          id?: string
+          sales_manual?: string | null
+          system_prompt?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          phone_number: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          phone_number: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          phone_number?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          lead_id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'messages_lead_id_fkey'
+            columns: ['lead_id']
+            isOneToOne: false
+            referencedRelation: 'leads'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_configs: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          id: string
+          phone_number_id: string | null
+          updated_at: string
+          user_id: string
+          verify_token: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id: string
+          verify_token?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id?: string
+          verify_token?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -153,3 +295,107 @@ export const Constants = {
 // IMPORTANT: The TypeScript types above map UUID, TEXT, VARCHAR all to "string".
 // Use the COLUMN TYPES section below to know the real PostgreSQL type for each column.
 // Always use the correct PostgreSQL type when writing SQL migrations.
+
+// --- COLUMN TYPES (actual PostgreSQL types) ---
+// Use this to know the real database type when writing migrations.
+// "string" in TypeScript types above may be uuid, text, varchar, timestamptz, etc.
+// Table: company_settings
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   sales_manual: text (nullable, default: ''::text)
+//   tone_of_voice: text (nullable, default: ''::text)
+//   company_objectives: text (nullable, default: ''::text)
+//   system_prompt: text (nullable, default: ''::text)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+// Table: leads
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   phone_number: text (not null)
+//   name: text (nullable)
+//   status: text (nullable, default: 'Novo'::text)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+// Table: messages
+//   id: uuid (not null, default: gen_random_uuid())
+//   lead_id: uuid (not null)
+//   role: text (not null)
+//   content: text (not null)
+//   created_at: timestamp with time zone (not null, default: now())
+// Table: profiles
+//   id: uuid (not null)
+//   email: text (not null)
+//   created_at: timestamp with time zone (not null, default: now())
+// Table: whatsapp_configs
+//   id: uuid (not null, default: gen_random_uuid())
+//   user_id: uuid (not null)
+//   phone_number_id: text (nullable, default: ''::text)
+//   access_token: text (nullable, default: ''::text)
+//   verify_token: text (nullable, default: ''::text)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+
+// --- CONSTRAINTS ---
+// Table: company_settings
+//   PRIMARY KEY company_settings_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY company_settings_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   UNIQUE company_settings_user_id_key: UNIQUE (user_id)
+// Table: leads
+//   PRIMARY KEY leads_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY leads_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   UNIQUE leads_user_id_phone_number_key: UNIQUE (user_id, phone_number)
+// Table: messages
+//   FOREIGN KEY messages_lead_id_fkey: FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+//   PRIMARY KEY messages_pkey: PRIMARY KEY (id)
+// Table: profiles
+//   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
+// Table: whatsapp_configs
+//   PRIMARY KEY whatsapp_configs_pkey: PRIMARY KEY (id)
+//   FOREIGN KEY whatsapp_configs_user_id_fkey: FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   UNIQUE whatsapp_configs_user_id_key: UNIQUE (user_id)
+
+// --- ROW LEVEL SECURITY POLICIES ---
+// Table: company_settings
+//   Policy "Users can manage own company_settings" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+// Table: leads
+//   Policy "Users can manage own leads" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+// Table: messages
+//   Policy "Users can manage own messages" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
+//     WITH CHECK: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
+// Table: profiles
+//   Policy "Users can view own profile" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = id)
+// Table: whatsapp_configs
+//   Policy "Users can manage own whatsapp_configs" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
+
+// --- DATABASE FUNCTIONS ---
+// FUNCTION handle_new_user()
+//   CREATE OR REPLACE FUNCTION public.handle_new_user()
+//    RETURNS trigger
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   BEGIN
+//     INSERT INTO public.profiles (id, email)
+//     VALUES (NEW.id, NEW.email)
+//     ON CONFLICT (id) DO NOTHING;
+//     RETURN NEW;
+//   END;
+//   $function$
+//
+
+// --- INDEXES ---
+// Table: company_settings
+//   CREATE UNIQUE INDEX company_settings_user_id_key ON public.company_settings USING btree (user_id)
+// Table: leads
+//   CREATE UNIQUE INDEX leads_user_id_phone_number_key ON public.leads USING btree (user_id, phone_number)
+// Table: whatsapp_configs
+//   CREATE UNIQUE INDEX whatsapp_configs_user_id_key ON public.whatsapp_configs USING btree (user_id)

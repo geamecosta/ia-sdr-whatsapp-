@@ -82,4 +82,24 @@ export const db = {
     if (error) throw error
     return data
   },
+  // Logs
+  async getLogs() {
+    const { data, error } = await supabase
+      .from('execution_logs' as any)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) throw error
+    return data || []
+  },
+  async addLog(level: string, message: string, details?: any) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase
+      .from('execution_logs' as any)
+      .insert({ user_id: user.id, level, message, details })
+    if (error) throw error
+  },
 }

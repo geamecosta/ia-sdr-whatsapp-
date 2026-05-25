@@ -8,11 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast'
 import { MessageSquare } from 'lucide-react'
 
-export default function Login() {
-  const [email, setEmail] = useState('geamefialho@hotmail.com')
-  const [password, setPassword] = useState('Skip@Pass')
+export default function Register() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { signIn, user, loading } = useAuth()
+  const { signUp, user, loading } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -25,14 +25,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    const { error } = await signIn(email, password)
+    const { error } = await signUp(email, password)
     if (error) {
       toast({
         variant: 'destructive',
-        title: 'Erro ao entrar',
+        title: 'Erro ao cadastrar',
         description: error.message,
       })
     } else {
+      toast({
+        title: 'Cadastro realizado',
+        description: 'Você já pode acessar o sistema.',
+      })
       navigate('/')
     }
     setIsSubmitting(false)
@@ -46,8 +50,8 @@ export default function Login() {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle>Bem-vindo de volta</CardTitle>
-          <CardDescription>Faça login para gerenciar seu assistente virtual</CardDescription>
+          <CardTitle>Criar Conta</CardTitle>
+          <CardDescription>Cadastre-se para escalar suas vendas com IA</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -67,19 +71,20 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
+                placeholder="Mínimo de 8 caracteres"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Entrando...' : 'Entrar'}
+              {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            Não tem uma conta?{' '}
-            <Link to="/register" className="text-primary hover:underline font-medium">
-              Cadastre-se
+            Já tem uma conta?{' '}
+            <Link to="/login" className="text-primary hover:underline font-medium">
+              Entrar
             </Link>
           </div>
         </CardContent>
