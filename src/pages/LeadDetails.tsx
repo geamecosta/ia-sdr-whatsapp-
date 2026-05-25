@@ -31,6 +31,24 @@ export default function LeadDetails() {
     }
 
     fetchData()
+
+    const channel = supabase
+      .channel(`messages-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `lead_id=eq.${id}` },
+        (payload) => {
+          setMessages((current) => {
+            if (current.some((m) => m.id === payload.new.id)) return current
+            return [...current, payload.new]
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [id])
 
   if (loading) {

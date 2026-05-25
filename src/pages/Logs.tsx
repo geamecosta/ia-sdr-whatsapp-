@@ -23,6 +23,26 @@ export default function Logs() {
       setLoading(false)
     }
     fetchLogs()
+
+    const channel = supabase
+      .channel('logs-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'execution_logs',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          setLogs((current) => [payload.new, ...current].slice(0, 100))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [user])
 
   if (loading) {
