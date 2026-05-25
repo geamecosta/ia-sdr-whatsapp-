@@ -295,7 +295,7 @@ async function sendWhatsAppMessage(
   } else if (event.type === 'chatguru') {
     // Envio via ChatGuru API
     try {
-      const cgResponse = await fetch(`https://api.chatguru.com.br/api/v1?action=send_message`, {
+      const cgResponse = await fetch(`https://chatguru.app/api/v1?action=send_message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

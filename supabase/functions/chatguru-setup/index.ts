@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-bot?user_id=${user.id}`
 
     // Tenta registrar o webhook usando a API do ChatGuru
-    const chatGuruUrl = `https://api.chatguru.com.br/api/v1?action=webhook_config`
+    const chatGuruUrl = `https://chatguru.app/api/v1?action=webhook_config`
 
     const response = await fetch(chatGuruUrl, {
       method: 'POST',

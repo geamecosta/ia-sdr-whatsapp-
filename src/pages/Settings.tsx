@@ -214,17 +214,25 @@ export default function Settings() {
   const personalizedWebhookUrl = `${webhookUrl}?user_id=${user?.id || ''}`
 
   const handleRegisterChatGuruWebhook = async () => {
+    if (!user) return
     if (!waSettings.web_api_key) {
       toast({
         variant: 'destructive',
         title: 'Erro',
-        description:
-          'A API Key é obrigatória para registrar no ChatGuru. Salve as credenciais primeiro.',
+        description: 'A API Key é obrigatória para registrar no ChatGuru.',
       })
       return
     }
     setIsRegisteringWebhook(true)
     try {
+      // Salva as configurações antes de tentar registrar para garantir
+      // que o backend utilize as credenciais mais recentes inseridas.
+      const payload = { ...waSettings }
+      payload.phone_number_id = ''
+      payload.access_token = ''
+      payload.verify_token = ''
+      await db.updateWhatsappConfig(user.id, payload)
+
       const { data, error } = await supabase.functions.invoke('chatguru-setup')
 
       if (error) {
