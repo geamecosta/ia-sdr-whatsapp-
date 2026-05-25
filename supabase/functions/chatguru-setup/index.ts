@@ -129,9 +129,11 @@ Deno.serve(async (req) => {
     }
 
     let chatGuruUrl = parsedUrl.toString()
+    if (chatGuruUrl.endsWith('/')) {
+      chatGuruUrl = chatGuruUrl.slice(0, -1)
+    }
     if (!chatGuruUrl.includes('action=')) {
-      const separator = chatGuruUrl.includes('?') ? '&' : '?'
-      chatGuruUrl = `${chatGuruUrl}${separator}action=webhook_config`
+      chatGuruUrl = `${chatGuruUrl}/?action=webhook_config`
     }
 
     let response
@@ -151,6 +153,8 @@ Deno.serve(async (req) => {
       const payload: any = {
         key,
         api_key: key,
+        account_id: chatguru_account_id,
+        account: chatguru_account_id,
         webhook_url: webhookUrl,
         webhook: webhookUrl, // added for compatibility
       }
@@ -158,11 +162,6 @@ Deno.serve(async (req) => {
       if (phone_id) {
         payload.phone_id = phone_id
         payload.device_id = phone_id
-      }
-
-      if (chatguru_account_id) {
-        payload.account_id = chatguru_account_id
-        payload.account = chatguru_account_id
       }
 
       response = await fetch(chatGuruUrl, {
@@ -207,7 +206,12 @@ Deno.serve(async (req) => {
             'X-API-KEY': '***MASKED***',
             key: '***MASKED***',
           },
-          payload: { account_id: chatguru_account_id, has_api_key: !!key, phone_id },
+          payload: {
+            account_id: chatguru_account_id,
+            key: '***MASKED***',
+            phone_id,
+            webhook_url: webhookUrl,
+          },
         },
       })
       const errorMessage =

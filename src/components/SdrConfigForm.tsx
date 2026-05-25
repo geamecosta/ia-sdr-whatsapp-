@@ -53,12 +53,13 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
 
       const { data, error } = await query.maybeSingle()
 
-      const { data: allSettings } = await supabase
-        .from('company_settings')
+      const { data: userTemplates } = await supabase
+        .from('persona_templates')
         .select('*')
         .eq('user_id', user.id)
-      if (allSettings) {
-        setTemplates(allSettings)
+        .order('created_at', { ascending: false })
+      if (userTemplates) {
+        setTemplates(userTemplates)
       }
 
       if (data) {
@@ -167,7 +168,7 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
     <div className="space-y-5">
       {templates.length > 0 && (
         <div className="space-y-3 pb-5 border-b mb-5">
-          <Label>Associar Persona Existente a este Aparelho</Label>
+          <Label>Selecionar Template de Persona</Label>
           <div className="flex flex-col sm:flex-row gap-2">
             <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
               <SelectTrigger className="w-full">
@@ -177,9 +178,7 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
                 <SelectItem value="none">Nenhuma (Preencher manualmente)</SelectItem>
                 {templates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.whatsapp_config_id
-                      ? `Persona Específica (Ref: ${t.whatsapp_config_id.substring(0, 8)})`
-                      : 'Persona Global (Padrão)'}
+                    {t.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -215,7 +214,16 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
         />
       </div>
       <div className="space-y-2">
-        <Label>Objetivos e Manual de Vendas</Label>
+        <Label>Objetivos da Empresa</Label>
+        <Textarea
+          value={settings.company_objectives || ''}
+          onChange={(e) => setSettings({ ...settings, company_objectives: e.target.value })}
+          placeholder="Qual o objetivo da IA? Ex: Qualificar o lead e agendar uma reunião."
+          className="min-h-[60px]"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Manual de Vendas / FAQ</Label>
         <Textarea
           value={settings.sales_manual || ''}
           onChange={(e) => setSettings({ ...settings, sales_manual: e.target.value })}

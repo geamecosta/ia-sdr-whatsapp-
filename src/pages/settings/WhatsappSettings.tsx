@@ -207,6 +207,7 @@ export function WhatsappSettings() {
         toast({
           title: 'Erro',
           description:
+            json.details ||
             'Erro de comunicação com o ChatGuru ao configurar Webhook. Consulte os Logs para os detalhes técnicos.',
           variant: 'destructive',
           action: (
