@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { db } from '@/services/db'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -10,7 +9,6 @@ import {
   Settings,
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Clock,
   Info,
   AlertTriangle,
@@ -21,19 +19,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { OnboardingModal } from '@/components/OnboardingModal'
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
   Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
   PieChart,
   Pie,
 } from 'recharts'
@@ -49,49 +42,38 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
   const [leads, setLeads] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [waConfig, setWaConfig] = useState<any>(null)
-  const [metrics, setMetrics] = useState<{ leads: any[]; messages: any[] }>({
-    leads: [],
-    messages: [],
-  })
-  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!user) return
     try {
       setError(null)
-      const safeFetch = async (promise: Promise<any>, fallback: any) => {
-        try {
-          const result = await promise
-          return result !== undefined && result !== null ? result : fallback
-        } catch (e) {
-          console.error('Data fetch error:', e)
-          return fallback
-        }
-      }
+      setLoading(true)
 
-      const [leadsData, logsData, configData, settingsData, metricsData] = await Promise.all([
-        safeFetch(db.getLeads(), []),
-        safeFetch(db.getLogs(), []),
-        safeFetch(db.getWhatsappConfig(user.id), null),
-        safeFetch(db.getCompanySettings(user.id), null),
-        safeFetch(db.getMetrics(), { leads: [], messages: [] }),
+      const [leadsRes, logsRes, configRes] = await Promise.all([
+        supabase
+          .from('leads')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('execution_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase.from('whatsapp_configs').select('*').eq('user_id', user.id).maybeSingle(),
       ])
 
-      setLeads(Array.isArray(leadsData) ? leadsData : [])
-      setLogs(Array.isArray(logsData) ? logsData.slice(0, 5) : [])
-      setWaConfig(configData)
-      setMetrics(metricsData)
+      if (leadsRes.error) throw leadsRes.error
+      if (logsRes.error) throw logsRes.error
 
-      const isSettingsComplete =
-        settingsData?.company_objectives &&
-        settingsData?.sales_manual &&
-        settingsData?.tone_of_voice
-      if (!isSettingsComplete) {
-        setShowOnboarding(true)
-      }
+      setLeads(leadsRes.data || [])
+      setLogs(logsRes.data || [])
+      setWaConfig(configRes.data || null)
     } catch (err: any) {
       console.error('Error loading dashboard data:', err)
       setError(err.message || 'Erro ao carregar dados. Verifique sua conexão ou permissões.')
@@ -114,12 +96,20 @@ export default function Dashboard() {
     if (!user) return
     const channel = supabase
       .channel('dashboard-realtime')
-      .on('postgres', { event: '*', schema: 'public', table: 'leads' }, () => {
-        loadData()
-      })
-      .on('postgres', { event: '*', schema: 'public', table: 'messages' }, () => {
-        loadData()
-      })
+      .on(
+        'postgres',
+        { event: '*', schema: 'public', table: 'leads', filter: `user_id=eq.${user.id}` },
+        () => {
+          loadData()
+        },
+      )
+      .on(
+        'postgres',
+        { event: '*', schema: 'public', table: 'execution_logs', filter: `user_id=eq.${user.id}` },
+        () => {
+          loadData()
+        },
+      )
       .subscribe()
 
     return () => {
@@ -129,19 +119,21 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const safeLeads = Array.isArray(leads) ? leads : []
-    const counts = { total: safeLeads.length, novo: 0, emAtendimento: 0, convertido: 0, outros: 0 }
+    const counts = { total: safeLeads.length, novo: 0, emAtendimento: 0, qualificado: 0, outros: 0 }
     safeLeads.forEach((l) => {
       const s = l?.status?.toLowerCase() || ''
-      if (s.includes('novo')) counts.novo++
-      else if (s.includes('atendimento')) counts.emAtendimento++
-      else if (s.includes('convertido')) counts.convertido++
+      if (s === 'novo' || s === 'new') counts.novo++
+      else if (s.includes('atendimento') || s.includes('progress') || s.includes('andamento'))
+        counts.emAtendimento++
+      else if (s.includes('convertido') || s.includes('qualificado') || s.includes('qualified'))
+        counts.qualificado++
       else counts.outros++
     })
     return counts
   }, [leads])
 
   const conversionRate =
-    stats.total > 0 ? ((stats.convertido / stats.total) * 100).toFixed(1) : '0.0'
+    stats.total > 0 ? ((stats.qualificado / stats.total) * 100).toFixed(1) : '0.0'
 
   const isConfigured = Boolean(waConfig?.access_token && waConfig?.phone_number_id)
 
@@ -153,35 +145,26 @@ export default function Dashboard() {
     })
 
     return last14Days.map((date) => {
-      const count = metrics.leads.filter((l: any) => l.created_at?.startsWith(date)).length
-      return { date, count }
+      const dayLeads = leads.filter((l: any) => l.created_at?.startsWith(date))
+      const count = dayLeads.length
+      const qualified = dayLeads.filter((l: any) => {
+        const s = l.status?.toLowerCase() || ''
+        return s.includes('convertido') || s.includes('qualificado') || s.includes('qualified')
+      }).length
+      return { date, count, qualified }
     })
-  }, [metrics.leads])
+  }, [leads])
 
-  const messageChartData = useMemo(() => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - (6 - i))
-      return d.toISOString().split('T')[0]
-    })
-
-    return last7Days.map((date) => {
-      const dayMessages = metrics.messages.filter((m: any) => m.created_at?.startsWith(date))
-      const sent = dayMessages.filter((m: any) => m.role === 'assistant').length
-      const received = dayMessages.filter((m: any) => m.role === 'user').length
-      return { date, sent, received }
-    })
-  }, [metrics.messages])
-
-  const leadsByStatusData = useMemo(
-    () => [
+  const leadsByStatusData = useMemo(() => {
+    const data = [
       { status: 'Novo', count: stats.novo, fill: 'hsl(var(--chart-1))' },
       { status: 'Em Atendimento', count: stats.emAtendimento, fill: 'hsl(var(--chart-2))' },
-      { status: 'Convertido', count: stats.convertido, fill: 'hsl(var(--chart-3))' },
+      { status: 'Qualificado', count: stats.qualificado, fill: 'hsl(var(--chart-3))' },
       { status: 'Outros', count: stats.outros, fill: 'hsl(var(--chart-4))' },
-    ],
-    [stats],
-  )
+    ].filter((item) => item.count > 0)
+
+    return data.length > 0 ? data : [{ status: 'Sem Dados', count: 1, fill: 'hsl(var(--muted))' }]
+  }, [stats])
 
   if (loading) {
     return (
@@ -302,12 +285,13 @@ export default function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Volume de Leads (14 dias)</CardTitle>
-            <CardDescription>Crescimento da base de contatos</CardDescription>
+            <CardDescription>Total e Qualificados por dia</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={{
-                count: { label: 'Novos Leads', color: 'hsl(var(--chart-1))' },
+                count: { label: 'Total de Leads', color: 'hsl(var(--chart-1))' },
+                qualified: { label: 'Qualificados', color: 'hsl(var(--chart-3))' },
               }}
               className="h-[300px]"
             >
@@ -320,6 +304,10 @@ export default function Dashboard() {
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-count)" stopOpacity={0.8} />
                       <stop offset="95%" stopColor="var(--color-count)" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorQualified" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-qualified)" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="var(--color-qualified)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -338,6 +326,15 @@ export default function Dashboard() {
                     stroke="var(--color-count)"
                     fillOpacity={1}
                     fill="url(#colorCount)"
+                    name="Total de Leads"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="qualified"
+                    stroke="var(--color-qualified)"
+                    fillOpacity={1}
+                    fill="url(#colorQualified)"
+                    name="Qualificados"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -354,10 +351,11 @@ export default function Dashboard() {
             <ChartContainer
               config={{
                 count: { label: 'Leads' },
-                Novo: { color: 'hsl(var(--chart-1))' },
-                'Em Atendimento': { color: 'hsl(var(--chart-2))' },
-                Convertido: { color: 'hsl(var(--chart-3))' },
-                Outros: { color: 'hsl(var(--chart-4))' },
+                Novo: { label: 'Novo', color: 'hsl(var(--chart-1))' },
+                'Em Atendimento': { label: 'Em Atendimento', color: 'hsl(var(--chart-2))' },
+                Qualificado: { label: 'Qualificado', color: 'hsl(var(--chart-3))' },
+                Outros: { label: 'Outros', color: 'hsl(var(--chart-4))' },
+                'Sem Dados': { label: 'Sem Dados', color: 'hsl(var(--muted))' },
               }}
               className="h-[300px] w-full"
             >
@@ -480,8 +478,6 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
-
-      <OnboardingModal open={showOnboarding} onComplete={() => setShowOnboarding(false)} />
     </div>
   )
 }

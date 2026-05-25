@@ -407,8 +407,8 @@ export const Constants = {
 //     WITH CHECK: (auth.uid() = user_id)
 // Table: messages
 //   Policy "Users can manage own messages" (ALL, PERMISSIVE) roles={authenticated}
-//     USING: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
-//     WITH CHECK: (EXISTS ( SELECT 1    FROM leads   WHERE ((leads.id = messages.lead_id) AND (leads.user_id = auth.uid()))))
+//     USING: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
+//     WITH CHECK: (EXISTS ( SELECT 1    FROM leads l   WHERE ((l.id = messages.lead_id) AND (l.user_id = auth.uid()))))
 // Table: profiles
 //   Policy "Users can update own profile" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = id)
