@@ -70,19 +70,38 @@ Deno.serve(async (req) => {
           ? chatguru_endpoint_url.slice(0, -1)
           : chatguru_endpoint_url
         const chatGuruUrl = `${endpoint}?action=phones&key=${web_api_key}&account_id=${chatguru_account_id}`
-        const response = await fetch(chatGuruUrl)
+        const response = await fetch(chatGuruUrl, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: web_api_key,
+          },
+        })
         const text = await response.text()
         let result
         try {
           result = JSON.parse(text)
         } catch (e) {
-          if (response.status === 404 || text.toLowerCase().includes('not found')) {
+          await supabase.from('execution_logs').insert({
+            user_id: user.id,
+            level: 'error',
+            message: 'Erro ao fazer parse da resposta do ChatGuru',
+            details: { status: response.status, rawResponse: text, endpoint },
+          })
+          if (
+            response.status === 404 ||
+            response.status === 400 ||
+            text.toLowerCase().includes('not found')
+          ) {
             return new Response(
               JSON.stringify({
                 success: false,
-                error: 'Erro de Conexão: Endpoint não encontrado (404). Verifique a URL da API.',
+                error: 'URL do Endpoint inválida ou não suportada.',
               }),
-              { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              {
+                status: response.status === 200 ? 400 : response.status,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
             )
           }
           if (
@@ -94,7 +113,7 @@ Deno.serve(async (req) => {
             return new Response(
               JSON.stringify({
                 success: false,
-                error: 'Erro de Autenticação: Verifique seu Account ID e API Key.',
+                error: 'Credenciais inválidas: Verifique seu Account ID e API Key.',
               }),
               { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             )
@@ -112,19 +131,53 @@ Deno.serve(async (req) => {
         }
 
         if (result && result.error) {
-          let safeError = String(result.error)
-          if (web_api_key) safeError = safeError.split(web_api_key).join('***MASKED_KEY***')
+          await supabase.from('execution_logs').insert({
+            user_id: user.id,
+            level: 'error',
+            message: 'Erro retornado pela API do ChatGuru',
+            details: { rawResponse: text, endpoint, error: result.error },
+          })
           return new Response(
             JSON.stringify({
               success: false,
-              error: 'Erro de Autenticação: Verifique seu Account ID e API Key.',
-              details: safeError,
+              error: 'Credenciais inválidas: Verifique seu Account ID e API Key.',
+              details: String(result.error),
             }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
           )
         }
 
         if (!response.ok) {
+          await supabase.from('execution_logs').insert({
+            user_id: user.id,
+            level: 'error',
+            message: `Erro de comunicação HTTP com o ChatGuru (${response.status})`,
+            details: { status: response.status, rawResponse: text, endpoint },
+          })
+          if (response.status === 404 || response.status === 400) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'URL do Endpoint inválida ou não suportada.',
+              }),
+              {
+                status: response.status,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            )
+          }
+          if (response.status === 401 || response.status === 403) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'Credenciais inválidas: Verifique seu Account ID e API Key.',
+              }),
+              {
+                status: response.status,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            )
+          }
           return new Response(
             JSON.stringify({
               success: false,
@@ -141,19 +194,24 @@ Deno.serve(async (req) => {
         if (result && Array.isArray(result)) {
           rawDevices = result
         } else if (result && typeof result === 'object') {
-          if (result.phones && Array.isArray(result.phones)) {
+          if (result.data && Array.isArray(result.data)) {
+            rawDevices = result.data
+          } else if (result.instances && Array.isArray(result.instances)) {
+            rawDevices = result.instances
+          } else if (result.phones && Array.isArray(result.phones)) {
             rawDevices = result.phones
           } else if (result.devices && Array.isArray(result.devices)) {
             rawDevices = result.devices
-          } else if (result.data && Array.isArray(result.data)) {
-            rawDevices = result.data
           } else {
             const vals = Object.values(result)
             const objectVals = vals.filter(
               (v) =>
                 typeof v === 'object' &&
                 v !== null &&
-                ('id' in (v as any) || 'phone_id' in (v as any) || 'instance_id' in (v as any)),
+                ('id' in (v as any) ||
+                  'phone_id' in (v as any) ||
+                  'instance_id' in (v as any) ||
+                  'key' in (v as any)),
             )
             if (objectVals.length > 0) {
               rawDevices = objectVals
@@ -162,10 +220,16 @@ Deno.serve(async (req) => {
             }
           }
         } else {
+          await supabase.from('execution_logs').insert({
+            user_id: user.id,
+            level: 'error',
+            message: 'Formato inválido retornado pela API do ChatGuru',
+            details: { rawResponse: text, endpoint },
+          })
           return new Response(
             JSON.stringify({
               success: false,
-              error: 'Formato inválido retornado pela API',
+              error: 'URL do Endpoint inválida ou não suportada.',
               details: JSON.stringify(result).substring(0, 100),
             }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

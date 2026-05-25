@@ -108,7 +108,7 @@ export function WhatsappSettings() {
         if (json.devices?.length === 0) {
           toast({
             title: 'Aviso',
-            description: 'Nenhum aparelho encontrado para esta conta.',
+            description: 'Nenhum aparelho localizado nesta conta.',
             variant: 'default',
           })
         } else {
@@ -118,7 +118,13 @@ export function WhatsappSettings() {
           })
         }
       } else {
-        throw new Error(json.error || 'Falha ao buscar aparelhos')
+        let errorMsg = json.error || 'Falha ao buscar aparelhos'
+        if (res.status === 401 || res.status === 403) {
+          errorMsg = 'Credenciais inválidas: Verifique seu Account ID e API Key.'
+        } else if (res.status === 400 || res.status === 404) {
+          errorMsg = 'URL do Endpoint inválida ou não suportada.'
+        }
+        throw new Error(errorMsg)
       }
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' })
