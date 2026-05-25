@@ -19,6 +19,8 @@ export type Database = {
           tone_of_voice: string | null
           updated_at: string
           user_id: string
+          welcome_message_content: string | null
+          welcome_message_enabled: boolean | null
         }
         Insert: {
           company_objectives?: string | null
@@ -29,6 +31,8 @@ export type Database = {
           tone_of_voice?: string | null
           updated_at?: string
           user_id: string
+          welcome_message_content?: string | null
+          welcome_message_enabled?: boolean | null
         }
         Update: {
           company_objectives?: string | null
@@ -39,6 +43,8 @@ export type Database = {
           tone_of_voice?: string | null
           updated_at?: string
           user_id?: string
+          welcome_message_content?: string | null
+          welcome_message_enabled?: boolean | null
         }
         Relationships: []
       }
@@ -105,6 +111,7 @@ export type Database = {
           created_at: string
           id: string
           lead_id: string
+          provider_message_id: string | null
           role: string
         }
         Insert: {
@@ -112,6 +119,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id: string
+          provider_message_id?: string | null
           role: string
         }
         Update: {
@@ -119,6 +127,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string
+          provider_message_id?: string | null
           role?: string
         }
         Relationships: [
@@ -155,7 +164,9 @@ export type Database = {
           connection_type: string
           created_at: string
           id: string
+          last_heartbeat: string | null
           phone_number_id: string | null
+          status: string | null
           updated_at: string
           user_id: string
           verify_token: string | null
@@ -167,7 +178,9 @@ export type Database = {
           connection_type?: string
           created_at?: string
           id?: string
+          last_heartbeat?: string | null
           phone_number_id?: string | null
+          status?: string | null
           updated_at?: string
           user_id: string
           verify_token?: string | null
@@ -179,7 +192,9 @@ export type Database = {
           connection_type?: string
           created_at?: string
           id?: string
+          last_heartbeat?: string | null
           phone_number_id?: string | null
+          status?: string | null
           updated_at?: string
           user_id?: string
           verify_token?: string | null
@@ -344,6 +359,8 @@ export const Constants = {
 //   system_prompt: text (nullable, default: ''::text)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+//   welcome_message_enabled: boolean (nullable, default: false)
+//   welcome_message_content: text (nullable)
 // Table: execution_logs
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -365,6 +382,7 @@ export const Constants = {
 //   role: text (not null)
 //   content: text (not null)
 //   created_at: timestamp with time zone (not null, default: now())
+//   provider_message_id: text (nullable)
 // Table: profiles
 //   id: uuid (not null)
 //   email: text (not null)
@@ -380,6 +398,8 @@ export const Constants = {
 //   connection_type: text (not null, default: 'official'::text)
 //   web_instance_id: text (nullable)
 //   web_api_key: text (nullable)
+//   status: text (nullable, default: 'disconnected'::text)
+//   last_heartbeat: timestamp with time zone (nullable)
 
 // --- CONSTRAINTS ---
 // Table: company_settings
@@ -457,5 +477,7 @@ export const Constants = {
 // Table: leads
 //   CREATE INDEX leads_status_idx ON public.leads USING btree (status)
 //   CREATE UNIQUE INDEX leads_user_id_phone_number_key ON public.leads USING btree (user_id, phone_number)
+// Table: messages
+//   CREATE UNIQUE INDEX messages_provider_message_id_idx ON public.messages USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL)
 // Table: whatsapp_configs
 //   CREATE UNIQUE INDEX whatsapp_configs_user_id_key ON public.whatsapp_configs USING btree (user_id)

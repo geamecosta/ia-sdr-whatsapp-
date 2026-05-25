@@ -54,6 +54,27 @@ Deno.serve(async (req) => {
             }
           }
         }
+      } else if (body.chat_id || (body.message && body.message.chat_id) || body.text) {
+        // ChatGuru Payload
+        const msg = body.message || body
+        const fromPhone = String(msg.chat_id || body.chat_id || '')
+          .replace('@c.us', '')
+          .replace('@s.whatsapp.net', '')
+        const text = msg.text || body.text || ''
+        const msgId = msg.id || body.id || `cg_${Date.now()}`
+        const phoneId = body.phone_id || msg.phone_id
+
+        // Ignora mensagens enviadas pelo próprio bot ou sem texto
+        if (fromPhone && text && !msg.from_me) {
+          events.push({
+            type: 'chatguru',
+            instanceId: phoneId,
+            fromPhone,
+            senderName: msg.sender_name || body.sender_name || 'Desconhecido',
+            msgText: text,
+            msgId,
+          })
+        }
       } else if (body.event === 'messages.upsert' || body.instance) {
         const instanceId = body.instance
         const msgData = body.data?.message
@@ -73,19 +94,43 @@ Deno.serve(async (req) => {
         }
       }
 
+      const url = new URL(req.url)
+      const userIdQuery = url.searchParams.get('user_id')
+
       for (const event of events) {
         if (!event.msgText) continue
 
         let configQuery = supabase
           .from('whatsapp_configs')
-          .select('user_id, access_token, web_api_key, connection_type')
+          .select('user_id, access_token, web_api_key, web_instance_id, connection_type')
         if (event.type === 'official') {
           configQuery = configQuery.eq('phone_number_id', event.phoneNumberId).single()
+        } else if (event.type === 'chatguru') {
+          if (userIdQuery) {
+            configQuery = configQuery
+              .eq('user_id', userIdQuery)
+              .eq('connection_type', 'chatguru')
+              .single()
+          } else if (event.instanceId) {
+            configQuery = configQuery
+              .eq('web_instance_id', event.instanceId)
+              .eq('connection_type', 'chatguru')
+              .single()
+          } else {
+            continue // Cannot securely identify ChatGuru account
+          }
         } else {
-          configQuery = configQuery
-            .eq('web_instance_id', event.instanceId)
-            .eq('connection_type', 'web')
-            .single()
+          if (userIdQuery) {
+            configQuery = configQuery
+              .eq('user_id', userIdQuery)
+              .eq('connection_type', 'web')
+              .single()
+          } else {
+            configQuery = configQuery
+              .eq('web_instance_id', event.instanceId)
+              .eq('connection_type', 'web')
+              .single()
+          }
         }
 
         const { data: config } = await configQuery
@@ -246,6 +291,48 @@ async function sendWhatsAppMessage(
         .from('whatsapp_configs')
         .update({ status: 'error' })
         .eq('user_id', config.user_id)
+    }
+  } else if (event.type === 'chatguru') {
+    // Envio via ChatGuru API
+    try {
+      const cgResponse = await fetch(`https://api.chatguru.com.br/api/v1?action=send_message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: config.web_api_key,
+          phone_id: config.web_instance_id,
+          chat_id: to,
+          text: text,
+        }),
+      })
+
+      if (cgResponse.ok) {
+        await supabaseClient.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'success',
+          message: `Resposta enviada para ${to} via ChatGuru`,
+          details: { text: text },
+        })
+      } else {
+        const errData = await cgResponse.text()
+        await supabaseClient.from('execution_logs').insert({
+          user_id: config.user_id,
+          level: 'error',
+          message: `Erro ao enviar mensagem via ChatGuru para ${to}`,
+          details: { error_data: errData, connection: true },
+        })
+        await supabaseClient
+          .from('whatsapp_configs')
+          .update({ status: 'error' })
+          .eq('user_id', config.user_id)
+      }
+    } catch (e: any) {
+      await supabaseClient.from('execution_logs').insert({
+        user_id: config.user_id,
+        level: 'error',
+        message: `Falha de rede ao contatar ChatGuru`,
+        details: { error: e.message },
+      })
     }
   } else {
     // Simulated web gateway response

@@ -1,5 +1,6 @@
 {
   "_versions": {
-    "whatsapp-bot": 5
+    "whatsapp-bot": 6,
+    "chatguru-setup": 1
   }
 }

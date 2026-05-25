@@ -209,7 +209,35 @@ export default function Settings() {
     }, 1500)
   }
 
+  const [isRegisteringWebhook, setIsRegisteringWebhook] = useState(false)
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://seu-projeto.supabase.co'}/functions/v1/whatsapp-bot`
+  const personalizedWebhookUrl = `${webhookUrl}?user_id=${user?.id || ''}`
+
+  const handleRegisterChatGuruWebhook = async () => {
+    if (!waSettings.web_api_key) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'A API Key é obrigatória para registrar no ChatGuru.',
+      })
+      return
+    }
+    setIsRegisteringWebhook(true)
+    try {
+      const { error } = await supabase.functions.invoke('chatguru-setup', {
+        body: {
+          key: waSettings.web_api_key,
+          phone_id: waSettings.web_instance_id,
+          webhook_url: personalizedWebhookUrl,
+        },
+      })
+      if (error) throw error
+      toast({ title: 'Sucesso', description: 'Webhook registrado no ChatGuru com sucesso.' })
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao registrar webhook', description: e.message })
+    }
+    setIsRegisteringWebhook(false)
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -396,7 +424,13 @@ export default function Settings() {
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="web" id="web" />
                       <Label htmlFor="web" className="font-normal cursor-pointer">
-                        Instância Web
+                        Instância Web (Genérica)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="chatguru" id="chatguru" />
+                      <Label htmlFor="chatguru" className="font-normal cursor-pointer">
+                        ChatGuru
                       </Label>
                     </div>
                   </RadioGroup>
@@ -439,6 +473,41 @@ export default function Settings() {
                       </p>
                     </div>
                   </div>
+                ) : waSettings.connection_type === 'chatguru' ? (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-2">
+                      <Label>Phone ID (Opcional se usar apenas 1 número)</Label>
+                      <Input
+                        placeholder="Ex: phone123"
+                        value={waSettings.web_instance_id}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, web_instance_id: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Key da API ChatGuru</Label>
+                      <Input
+                        type="password"
+                        placeholder="Ex: chave_secreta..."
+                        value={waSettings.web_api_key}
+                        onChange={(e) =>
+                          setWaSettings({ ...waSettings, web_api_key: e.target.value })
+                        }
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleRegisterChatGuruWebhook}
+                      disabled={isRegisteringWebhook}
+                      className="w-full"
+                    >
+                      {isRegisteringWebhook
+                        ? 'Registrando Webhook...'
+                        : 'Registrar Webhook no ChatGuru automaticamente'}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                     <div className="space-y-2">
@@ -469,7 +538,11 @@ export default function Settings() {
               <div className="pt-4 border-t space-y-4">
                 <h3 className="text-sm font-medium">Configuração do Webhook</h3>
                 <div className="p-4 rounded-md bg-muted border flex items-center justify-between gap-4">
-                  <code className="text-xs break-all flex-1">{webhookUrl}</code>
+                  <code className="text-xs break-all flex-1">
+                    {waSettings.connection_type === 'chatguru'
+                      ? personalizedWebhookUrl
+                      : webhookUrl}
+                  </code>
                   <Button
                     variant="outline"
                     size="sm"
