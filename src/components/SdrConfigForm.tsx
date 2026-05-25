@@ -143,7 +143,7 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
     )
   }
 
-  const handleLoadTemplate = () => {
+  const handleApplyTemplate = () => {
     const t = templates.find((x) => x.id === selectedTemplate)
     if (t) {
       setSettings({
@@ -156,8 +156,9 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
         welcome_message_content: t.welcome_message_content || '',
       })
       toast({
-        title: 'Persona Carregada',
-        description: 'Edite conforme necessário e clique em salvar.',
+        title: 'Persona Aplicada',
+        description:
+          'Os dados foram preenchidos. Clique em "Salvar SDR" para confirmar a associação.',
       })
     }
   }
@@ -166,18 +167,18 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
     <div className="space-y-5">
       {templates.length > 0 && (
         <div className="space-y-3 pb-5 border-b mb-5">
-          <Label>Carregar de uma Persona Existente (Templates)</Label>
+          <Label>Associar Persona Existente a este Aparelho</Label>
           <div className="flex flex-col sm:flex-row gap-2">
             <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione um template..." />
+                <SelectValue placeholder="Selecione uma persona..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nenhum (Preencher manualmente)</SelectItem>
+                <SelectItem value="none">Nenhuma (Preencher manualmente)</SelectItem>
                 {templates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
                     {t.whatsapp_config_id
-                      ? `Persona do Aparelho (ID: ${t.whatsapp_config_id.substring(0, 8)})`
+                      ? `Persona Específica (Ref: ${t.whatsapp_config_id.substring(0, 8)})`
                       : 'Persona Global (Padrão)'}
                   </SelectItem>
                 ))}
@@ -185,12 +186,12 @@ export function SdrConfigForm({ whatsappConfigId = null, onSaved }: SdrConfigFor
             </Select>
             <Button
               variant="secondary"
-              onClick={handleLoadTemplate}
+              onClick={handleApplyTemplate}
               disabled={selectedTemplate === 'none'}
               className="w-full sm:w-auto shrink-0"
             >
               <Copy className="w-4 h-4 mr-2" />
-              Copiar Dados
+              Aplicar Persona
             </Button>
           </div>
         </div>
