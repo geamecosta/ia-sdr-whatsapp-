@@ -1,143 +1,129 @@
-import { useEffect, useState } from 'react'
-import { db } from '@/services/db'
+import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
-import { Card, CardContent } from '@/components/ui/card'
-import { AlertTriangle, ShieldCheck, Info, RefreshCw } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/hooks/use-toast'
+import { useEffect, useState } from 'react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 export default function Logs() {
+  const { user } = useAuth()
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'connection'>('all')
-  const [isRetrying, setIsRetrying] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
-    let mounted = true
-    db.getLogs()
-      .then((data) => {
-        if (mounted) {
-          setLogs(data || [])
-          setLoading(false)
-        }
-      })
-      .catch((err) => {
-        console.error(err)
-        if (mounted) setLoading(false)
-      })
+    if (!user) return
+    const fetchLogs = async () => {
+      const { data } = await supabase
+        .from('execution_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      if (data) setLogs(data)
+      setLoading(false)
+    }
+
+    fetchLogs()
+
+    const channel = supabase
+      .channel('public:execution_logs')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'execution_logs',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          setLogs((current) => [payload.new, ...current].slice(0, 100))
+        },
+      )
+      .subscribe()
+
     return () => {
-      mounted = false
+      supabase.removeChannel(channel)
     }
-  }, [])
-
-  const handleRetryConnection = async () => {
-    setIsRetrying(true)
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        await db.updateWhatsappConfig(user.id, { status: 'connecting' })
-        toast({ title: 'Reconectando...', description: 'Uma tentativa de conexão foi iniciada.' })
-      }
-    } catch (e) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao tentar reconectar.' })
-    }
-    setIsRetrying(false)
-  }
-
-  const filteredLogs = logs.filter((log) => {
-    if (filter === 'connection') {
-      const msg = log.message.toLowerCase()
-      const isConnectionMsg =
-        msg.includes('conexão') ||
-        msg.includes('webhook') ||
-        msg.includes('instância') ||
-        msg.includes('erro ao enviar')
-      const hasConnectionDetails =
-        log.details && (log.details.connection || log.details.error || log.details.error_data)
-      return isConnectionMsg || hasConnectionDetails
-    }
-    return true
-  })
+  }, [user])
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Logs de Execução</h1>
-          <p className="text-muted-foreground">Histórico completo de atividades do sistema.</p>
-        </div>
-        <Button
-          onClick={handleRetryConnection}
-          disabled={isRetrying}
-          variant="outline"
-          className="gap-2"
-        >
-          <RefreshCw className={cn('h-4 w-4', isRetrying && 'animate-spin')} />
-          {isRetrying ? 'Tentando reconectar...' : 'Testar Conexão'}
-        </Button>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Logs de Execução</h1>
+        <p className="text-muted-foreground">
+          Acompanhe as atividades e erros do sistema em tempo real.
+        </p>
       </div>
 
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="all">Todos os Logs</TabsTrigger>
-          <TabsTrigger value="connection">Eventos de Conexão</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="space-y-4">
-        {loading ? (
-          <p>Carregando...</p>
-        ) : filteredLogs.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">
-              Nenhum log encontrado para o filtro selecionado.
-            </CardContent>
-          </Card>
-        ) : (
-          filteredLogs.map((log) => (
-            <Card key={log.id} className="overflow-hidden">
-              <div className="flex items-start p-4 gap-4">
-                <div className="mt-1">
-                  {log.level === 'error' ? (
-                    <AlertTriangle className="w-5 h-5 text-destructive" />
-                  ) : log.level === 'success' ? (
-                    <ShieldCheck className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <Info className="w-5 h-5 text-blue-500" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground">{log.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(log.created_at).toLocaleString()}
-                  </p>
-                  {log.details && (
-                    <pre className="mt-2 text-xs bg-muted p-2 rounded-md overflow-x-auto">
-                      {JSON.stringify(log.details, null, 2)}
-                    </pre>
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    'px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider rounded-full',
-                    log.level === 'error'
-                      ? 'bg-destructive/10 text-destructive'
-                      : log.level === 'success'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                  )}
-                >
-                  {log.level}
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
+      <div className="rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[180px]">Data/Hora</TableHead>
+              <TableHead className="w-[120px]">Nível</TableHead>
+              <TableHead>Mensagem e Detalhes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={3} className="h-24 text-center">
+                  Carregando logs...
+                </TableCell>
+              </TableRow>
+            ) : (
+              logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                    {format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        log.level === 'error'
+                          ? 'destructive'
+                          : log.level === 'success'
+                            ? 'default'
+                            : 'secondary'
+                      }
+                      className="capitalize font-medium"
+                    >
+                      {log.level === 'error'
+                        ? 'Erro'
+                        : log.level === 'success'
+                          ? 'Sucesso'
+                          : log.level}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium">{log.message}</span>
+                    {log.details && (
+                      <div className="mt-1 text-xs text-muted-foreground font-mono bg-muted/50 p-2 rounded max-h-24 overflow-y-auto">
+                        {JSON.stringify(log.details, null, 2)}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+            {!loading && logs.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                  Nenhum log registrado no sistema.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   )

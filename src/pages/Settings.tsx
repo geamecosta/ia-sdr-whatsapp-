@@ -1,210 +1,191 @@
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Bot, Phone, ShieldCheck } from 'lucide-react'
-import { db } from '@/services/db'
 import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase/client'
+import { useEffect, useState } from 'react'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
+import { Save } from 'lucide-react'
 
 export default function Settings() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-
-  const [settings, setSettings] = useState({
-    welcome_message_enabled: false,
-    welcome_message_content: '',
+  const [settings, setSettings] = useState<any>({
+    company_objectives: '',
+    sales_manual: '',
     system_prompt: '',
     tone_of_voice: '',
+    welcome_message_enabled: false,
+    welcome_message_content: '',
   })
 
   useEffect(() => {
-    if (user) {
-      db.getCompanySettings(user.id)
-        .then((data) => {
-          if (data) {
-            setSettings({
-              welcome_message_enabled: data.welcome_message_enabled || false,
-              welcome_message_content: data.welcome_message_content || '',
-              system_prompt: data.system_prompt || '',
-              tone_of_voice: data.tone_of_voice || '',
-            })
-          }
-          setLoading(false)
-        })
-        .catch(() => setLoading(false))
+    if (!user) return
+    const fetchSettings = async () => {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (data) {
+        setSettings(data)
+      } else if (!error) {
+        const defaultSettings = {
+          user_id: user.id,
+          welcome_message_enabled: false,
+          welcome_message_content: 'Olá! Como posso ajudar você hoje?',
+        }
+        await supabase.from('company_settings').insert(defaultSettings)
+        setSettings(defaultSettings)
+      }
+      setLoading(false)
     }
+
+    fetchSettings()
   }, [user])
 
   const handleSave = async () => {
     if (!user) return
     setSaving(true)
-    try {
-      await db.updateCompanySettings(user.id, settings)
-      toast({ title: 'Sucesso', description: 'Configurações salvas com sucesso.' })
-    } catch (e) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Falha ao salvar configurações.',
+
+    const { error } = await supabase
+      .from('company_settings')
+      .update({
+        company_objectives: settings.company_objectives,
+        sales_manual: settings.sales_manual,
+        system_prompt: settings.system_prompt,
+        tone_of_voice: settings.tone_of_voice,
+        welcome_message_enabled: settings.welcome_message_enabled,
+        welcome_message_content: settings.welcome_message_content,
+        updated_at: new Date().toISOString(),
       })
-    }
+      .eq('user_id', user.id)
+
     setSaving(false)
+
+    if (error) {
+      toast({
+        title: 'Erro',
+        description: 'Falha ao salvar as configurações.',
+        variant: 'destructive',
+      })
+    } else {
+      toast({ title: 'Sucesso', description: 'Configurações salvas com sucesso.' })
+    }
   }
 
   if (loading)
     return <div className="p-8 text-center text-muted-foreground">Carregando configurações...</div>
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-10">
+    <div className="space-y-6 max-w-4xl mx-auto pb-12">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground mt-1">
-          Gerencie o comportamento do seu SDR e a integração com WhatsApp.
+        <p className="text-muted-foreground">
+          Gerencie o comportamento e os parâmetros da sua Inteligência Artificial.
         </p>
       </div>
 
-      <Tabs defaultValue="persona" className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8">
-          <TabsTrigger value="persona" className="gap-2">
-            <Bot className="h-4 w-4" />
-            Persona da IA
-          </TabsTrigger>
-          <TabsTrigger value="whatsapp" className="gap-2">
-            <Phone className="h-4 w-4" />
-            WhatsApp
-          </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            Segurança
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="persona" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Automação Inicial</CardTitle>
-                  <CardDescription>Configure como a IA recebe novos leads.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5 pr-4">
-                      <Label className="text-base font-semibold">Mensagem de Boas-vindas</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Enviar automaticamente quando um novo lead entrar em contato.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={settings.welcome_message_enabled}
-                      onCheckedChange={(c) =>
-                        setSettings({ ...settings, welcome_message_enabled: c })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Conteúdo da Mensagem de Boas-vindas</Label>
-                    <Textarea
-                      value={settings.welcome_message_content}
-                      onChange={(e) =>
-                        setSettings({ ...settings, welcome_message_content: e.target.value })
-                      }
-                      className="min-h-[120px] resize-y"
-                      placeholder="Oi {PRIMEIRO_NOME_LEAD} 😊&#10;Seja muito bem-vindo(a) por aqui!&#10;É um prazer falar com você 💛"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Comportamento e Tom</CardTitle>
-                  <CardDescription>Defina a personalidade do seu SDR.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Prompt do Sistema (System Prompt)</Label>
-                    <Textarea
-                      value={settings.system_prompt}
-                      onChange={(e) => setSettings({ ...settings, system_prompt: e.target.value })}
-                      className="min-h-[150px] resize-y"
-                      placeholder="Você é um SDR especialista em atendimento de loja de roupas..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tom de Voz</Label>
-                    <Textarea
-                      value={settings.tone_of_voice}
-                      onChange={(e) => setSettings({ ...settings, tone_of_voice: e.target.value })}
-                      className="min-h-[100px] resize-y"
-                      placeholder="Tom de voz: A IA deve se comunicar de forma humana, amigável..."
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex justify-start">
-                <Button onClick={handleSave} disabled={saving} size="lg">
-                  {saving ? 'Salvando...' : 'Salvar Configurações'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="lg:col-span-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Testar Prompt</CardTitle>
-                  <CardDescription>Simule como a IA responderia a um lead.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Mensagem do Lead</Label>
-                    <Textarea
-                      placeholder="Escreva uma mensagem de teste..."
-                      className="min-h-[120px] resize-y"
-                    />
-                  </div>
-                  <Button variant="secondary" className="w-full">
-                    Gerar Resposta
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Comportamento da IA (SDR)</CardTitle>
+          <CardDescription>
+            Defina a personalidade, tom de voz e os objetivos para que a IA represente sua empresa.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="tone">Tom de Voz</Label>
+            <Input
+              id="tone"
+              value={settings.tone_of_voice || ''}
+              onChange={(e) => setSettings({ ...settings, tone_of_voice: e.target.value })}
+              placeholder="Ex: Profissional, amigável, persuasivo, formal..."
+            />
           </div>
-        </TabsContent>
 
-        <TabsContent value="whatsapp">
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações do WhatsApp</CardTitle>
-              <CardDescription>Em breve</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Configurações avançadas do WhatsApp ficarão disponíveis aqui.
+          <div className="space-y-2">
+            <Label htmlFor="objectives">Objetivos Principais da Empresa</Label>
+            <Textarea
+              id="objectives"
+              value={settings.company_objectives || ''}
+              onChange={(e) => setSettings({ ...settings, company_objectives: e.target.value })}
+              placeholder="Qual o objetivo principal do atendimento? Ex: Agendar uma reunião, qualificar o lead, vender um produto..."
+              className="min-h-[100px] resize-y"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="manual">Manual de Vendas (Contexto e Objeções)</Label>
+            <Textarea
+              id="manual"
+              value={settings.sales_manual || ''}
+              onChange={(e) => setSettings({ ...settings, sales_manual: e.target.value })}
+              placeholder="Forneça detalhes sobre seus produtos, preços, FAQs e como a IA deve contornar objeções comuns..."
+              className="min-h-[180px] resize-y"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Automação Inicial</CardTitle>
+          <CardDescription>
+            Configure a primeira mensagem que a IA enviará quando um novo lead entrar em contato.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center space-x-3 bg-muted/40 p-4 rounded-lg border">
+            <Switch
+              id="welcome"
+              checked={settings.welcome_message_enabled || false}
+              onCheckedChange={(c) => setSettings({ ...settings, welcome_message_enabled: c })}
+            />
+            <Label htmlFor="welcome" className="font-medium cursor-pointer">
+              Ativar Mensagem de Boas-vindas Automática
+            </Label>
+          </div>
+
+          {settings.welcome_message_enabled && (
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Label htmlFor="welcomeContent">Conteúdo da Mensagem</Label>
+              <Textarea
+                id="welcomeContent"
+                value={settings.welcome_message_content || ''}
+                onChange={(e) =>
+                  setSettings({ ...settings, welcome_message_content: e.target.value })
+                }
+                placeholder="Olá! Muito obrigado pelo seu contato. Como posso ajudar você hoje?"
+                className="min-h-[100px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Esta mensagem será disparada instantaneamente antes da IA assumir o contexto da
+                conversa.
               </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle>Segurança</CardTitle>
-              <CardDescription>Em breve</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Configurações de segurança da conta.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter className="bg-muted/30 border-t px-6 py-4 mt-2">
+          <Button onClick={handleSave} disabled={saving} className="ml-auto w-full sm:w-auto">
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? 'Salvando Alterações...' : 'Salvar Configurações'}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 }
