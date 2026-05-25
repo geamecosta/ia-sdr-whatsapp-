@@ -437,8 +437,10 @@ export const Constants = {
 // Table: company_settings
 //   CREATE UNIQUE INDEX company_settings_user_id_key ON public.company_settings USING btree (user_id)
 // Table: execution_logs
+//   CREATE INDEX execution_logs_created_at_idx ON public.execution_logs USING btree (created_at DESC)
 //   CREATE INDEX execution_logs_user_id_idx ON public.execution_logs USING btree (user_id)
 // Table: leads
+//   CREATE INDEX leads_status_idx ON public.leads USING btree (status)
 //   CREATE UNIQUE INDEX leads_user_id_phone_number_key ON public.leads USING btree (user_id, phone_number)
 // Table: whatsapp_configs
 //   CREATE UNIQUE INDEX whatsapp_configs_user_id_key ON public.whatsapp_configs USING btree (user_id)

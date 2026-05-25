@@ -27,34 +27,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [mfaStatus, setMfaStatus] = useState({ currentLevel: 'aal1', nextLevel: 'aal1' })
 
   useEffect(() => {
-    const updateMfaStatus = () => {
-      supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
-        if (data) {
+    let mounted = true
+
+    const checkInitialSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (mounted) {
+        setSession(session)
+        setUser(session?.user ?? null)
+      }
+
+      if (session?.user) {
+        const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+        if (mounted && data) {
           setMfaStatus({
             currentLevel: data.currentLevel,
             nextLevel: data.nextLevel,
           })
         }
-      })
+      }
+      if (mounted) {
+        setLoading(false)
+      }
     }
+
+    checkInitialSession()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      setLoading(false)
-      updateMfaStatus()
+
+      if (session?.user) {
+        supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => {
+          if (data) {
+            setMfaStatus({
+              currentLevel: data.currentLevel,
+              nextLevel: data.nextLevel,
+            })
+          }
+          setLoading(false)
+        })
+      } else {
+        setLoading(false)
+      }
     })
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-      updateMfaStatus()
-    })
-
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signUp = async (email: string, password: string) => {

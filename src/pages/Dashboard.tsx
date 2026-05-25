@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 export default function Dashboard() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [leads, setLeads] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
   const [waConfig, setWaConfig] = useState<any>(null)
@@ -32,6 +33,7 @@ export default function Dashboard() {
     async function loadData() {
       if (!user) return
       try {
+        setError(null)
         const [leadsData, logsData, configData] = await Promise.all([
           db.getLeads(),
           db.getLogs(),
@@ -42,8 +44,11 @@ export default function Dashboard() {
           setLogs(logsData.slice(0, 5))
           setWaConfig(configData)
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error loading dashboard data:', err)
+        if (mounted) {
+          setError(err.message || 'Erro ao carregar dados. Verifique sua conexão ou permissões.')
+        }
       } finally {
         if (mounted) setLoading(false)
       }
@@ -78,6 +83,17 @@ export default function Dashboard() {
           ))}
         </div>
         <Skeleton className="h-64 rounded-xl mt-8" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 animate-fade-in-up duration-500">
+        <AlertTriangle className="h-12 w-12 text-destructive" />
+        <h2 className="text-2xl font-semibold">Algo deu errado</h2>
+        <p className="text-muted-foreground">{error}</p>
+        <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
       </div>
     )
   }
