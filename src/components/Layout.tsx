@@ -32,6 +32,7 @@ export default function Layout() {
       db.getWhatsappConfig(user.id)
         .then((config) => {
           if (config) setConnectionStatus(config.status || 'disconnected')
+          else setConnectionStatus('disconnected')
         })
         .catch(console.error)
 
@@ -70,28 +71,48 @@ export default function Layout() {
     <>
       <Link
         to="/"
-        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname === '/' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium',
+          location.pathname === '/'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+        )}
       >
         <Activity className="h-5 w-5" />
         Dashboard
       </Link>
       <Link
         to="/leads"
-        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname.startsWith('/leads') ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium',
+          location.pathname.startsWith('/leads')
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+        )}
       >
         <Users className="h-5 w-5" />
         Leads
       </Link>
       <Link
         to="/logs"
-        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname === '/logs' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium',
+          location.pathname === '/logs'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+        )}
       >
         <List className="h-5 w-5" />
         Logs
       </Link>
       <Link
         to="/settings"
-        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${location.pathname === '/settings' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-medium',
+          location.pathname === '/settings'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'hover:bg-muted text-muted-foreground hover:text-foreground',
+        )}
       >
         <Settings className="h-5 w-5" />
         Configurações
