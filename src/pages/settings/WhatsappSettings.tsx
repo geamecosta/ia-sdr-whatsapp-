@@ -31,6 +31,7 @@ export function WhatsappSettings() {
   const [config, setConfig] = useState<any>({
     connection_type: 'official',
     status: 'disconnected',
+    last_heartbeat: null,
     phone_number_id: '',
     access_token: '',
     verify_token: '',
@@ -196,6 +197,11 @@ export function WhatsappSettings() {
               </span>
             )}
           </span>
+          {config.last_heartbeat && (
+            <span className="block mt-1">
+              Última comunicação: {new Date(config.last_heartbeat).toLocaleString()}
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

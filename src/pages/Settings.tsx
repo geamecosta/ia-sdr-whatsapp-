@@ -3,6 +3,7 @@ import { PersonaSettings } from './settings/PersonaSettings'
 import { WhatsappSettings } from './settings/WhatsappSettings'
 import { SecuritySettings } from './settings/SecuritySettings'
 import { UsageSettings } from './settings/UsageSettings'
+import { LogsSettings } from './settings/LogsSettings'
 
 export default function Settings() {
   return (
@@ -28,6 +29,9 @@ export default function Settings() {
           <TabsTrigger value="security" className="flex-1 h-9 min-w-[120px]">
             SEGURANÇA
           </TabsTrigger>
+          <TabsTrigger value="logs" className="flex-1 h-9 min-w-[120px]">
+            LOGS DO SISTEMA
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="persona" className="outline-none focus:ring-0">
@@ -44,6 +48,10 @@ export default function Settings() {
 
         <TabsContent value="security" className="outline-none focus:ring-0">
           <SecuritySettings />
+        </TabsContent>
+
+        <TabsContent value="logs" className="outline-none focus:ring-0">
+          <LogsSettings />
         </TabsContent>
       </Tabs>
     </div>

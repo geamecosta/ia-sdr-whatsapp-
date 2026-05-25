@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Loader2, AlertTriangle } from 'lucide-react'
 
 export function UsageSettings() {
   const { user } = useAuth()
@@ -16,6 +17,7 @@ export function UsageSettings() {
   const [limit, setLimit] = useState<number>(50000)
   const [cost, setCost] = useState<number>(0.02)
   const [currentUsage, setCurrentUsage] = useState<number>(0)
+  const [isBlocked, setIsBlocked] = useState<boolean>(false)
 
   useEffect(() => {
     if (user) {
@@ -38,6 +40,7 @@ export function UsageSettings() {
         quotaData.cost_per_1k_tokens !== undefined ? Number(quotaData.cost_per_1k_tokens) : 0.02,
       )
       setCurrentUsage(quotaData.current_month_usage || 0)
+      setIsBlocked(quotaData.is_blocked || false)
     }
     setLoading(false)
   }
@@ -89,6 +92,17 @@ export function UsageSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {isBlocked && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Conta Bloqueada</AlertTitle>
+            <AlertDescription>
+              A sua conta foi bloqueada devido ao excesso de cota de tokens. A IA não responderá às
+              mensagens até que a cota seja aumentada.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="bg-muted p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <p className="text-sm font-medium text-muted-foreground">Uso Atual (Mês)</p>

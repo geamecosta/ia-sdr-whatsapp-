@@ -193,6 +193,8 @@ export type Database = {
       }
       usage_quotas: {
         Row: {
+          alert_80_sent_at: string | null
+          cost_per_1k_tokens: number
           current_month_usage: number
           id: string
           is_blocked: boolean
@@ -201,6 +203,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          alert_80_sent_at?: string | null
+          cost_per_1k_tokens?: number
           current_month_usage?: number
           id?: string
           is_blocked?: boolean
@@ -209,6 +213,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          alert_80_sent_at?: string | null
+          cost_per_1k_tokens?: number
           current_month_usage?: number
           id?: string
           is_blocked?: boolean
@@ -466,6 +472,8 @@ export const Constants = {
 //   current_month_usage: integer (not null, default: 0)
 //   is_blocked: boolean (not null, default: false)
 //   last_reset_date: timestamp with time zone (not null, default: now())
+//   cost_per_1k_tokens: numeric (not null, default: 0.02)
+//   alert_80_sent_at: timestamp with time zone (nullable)
 // Table: whatsapp_configs
 //   id: uuid (not null, default: gen_random_uuid())
 //   user_id: uuid (not null)
@@ -540,6 +548,9 @@ export const Constants = {
 //   Policy "Admins can update quotas" (UPDATE, PERMISSIVE) roles={public}
 //     USING: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
+//   Policy "Users can update own quotas" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
 //   Policy "Users view own quotas" (SELECT, PERMISSIVE) roles={public}
 //     USING: ((auth.uid() = user_id) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true)))))
 // Table: whatsapp_configs
