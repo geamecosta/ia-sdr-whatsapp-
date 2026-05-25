@@ -398,10 +398,9 @@ export const Constants = {
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
 // Table: execution_logs
-//   Policy "Users can insert own logs" (INSERT, PERMISSIVE) roles={authenticated}
-//     WITH CHECK: (auth.uid() = user_id)
-//   Policy "Users can view own logs" (SELECT, PERMISSIVE) roles={authenticated}
+//   Policy "Users can manage own execution_logs" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
+//     WITH CHECK: (auth.uid() = user_id)
 // Table: leads
 //   Policy "Users can manage own leads" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
