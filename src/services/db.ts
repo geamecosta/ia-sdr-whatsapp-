@@ -9,6 +9,7 @@ export const db = {
       .from('whatsapp_configs')
       .select('*')
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle()
 
     if (error) {

@@ -548,6 +548,8 @@ export const Constants = {
 //   Policy "Admins can update quotas" (UPDATE, PERMISSIVE) roles={public}
 //     USING: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
 //     WITH CHECK: (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.is_admin = true))))
+//   Policy "Users can select own quotas" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (auth.uid() = user_id)
 //   Policy "Users can update own quotas" (UPDATE, PERMISSIVE) roles={authenticated}
 //     USING: (auth.uid() = user_id)
 //     WITH CHECK: (auth.uid() = user_id)
@@ -570,8 +572,8 @@ export const Constants = {
 //     VALUES (NEW.id, NEW.email, false)
 //     ON CONFLICT (id) DO NOTHING;
 //
-//     INSERT INTO public.usage_quotas (user_id, monthly_token_limit, current_month_usage)
-//     VALUES (NEW.id, 50000, 0)
+//     INSERT INTO public.usage_quotas (user_id, monthly_token_limit, current_month_usage, is_blocked)
+//     VALUES (NEW.id, 50000, 0, false)
 //     ON CONFLICT (user_id) DO NOTHING;
 //
 //     RETURN NEW;

@@ -167,11 +167,21 @@ Deno.serve(async (req) => {
             details: { text: event.msgText, msgId: event.msgId },
           })
 
-          const { data: settings } = await supabase
+          let { data: settings } = await supabase
             .from('company_settings')
             .select('*')
             .eq('user_id', config.user_id)
-            .single()
+            .eq('whatsapp_config_id', config.id)
+            .maybeSingle()
+          if (!settings) {
+            const { data: defaultSettings } = await supabase
+              .from('company_settings')
+              .select('*')
+              .eq('user_id', config.user_id)
+              .is('whatsapp_config_id', null)
+              .maybeSingle()
+            settings = defaultSettings
+          }
 
           let leadId: string | null = null
           let isNewLead = false

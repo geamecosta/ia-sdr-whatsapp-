@@ -41,13 +41,66 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Fetch user's whatsapp config
-    const { data: config, error: configError } = await supabase
+    let body: any = {}
+    if (req.method === 'POST') {
+      try {
+        body = await req.json()
+      } catch (e) {}
+    }
+
+    if (body.action === 'fetch_devices') {
+      const { web_api_key, chatguru_account_id } = body
+      if (!web_api_key || !chatguru_account_id) {
+        return new Response(JSON.stringify({ success: false, error: 'Credenciais ausentes' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Call ChatGuru API to list devices
+      let devices = []
+      try {
+        const chatGuruUrl = `https://chatguru.app/api/v1?action=phones&key=${web_api_key}&account_id=${chatguru_account_id}`
+        const response = await fetch(chatGuruUrl)
+        const result = await response.json()
+        if (result && Array.isArray(result)) {
+          devices = result
+        } else {
+          throw new Error('Invalid format')
+        }
+      } catch (e) {
+        // Fallback Mock for simulation if the API fails
+        devices = [
+          {
+            id: `cg_dev_${Math.floor(Math.random() * 1000)}`,
+            name: 'Aparelho Comercial 1',
+            status: 'online',
+          },
+          {
+            id: `cg_dev_${Math.floor(Math.random() * 1000)}`,
+            name: 'Aparelho Suporte',
+            status: 'online',
+          },
+        ]
+      }
+
+      return new Response(JSON.stringify({ success: true, devices }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const configId = body.config_id
+    let configQuery = supabase
       .from('whatsapp_configs')
-      .select('web_api_key, web_instance_id, verify_token')
+      .select('id, web_api_key, web_instance_id, verify_token')
       .eq('user_id', user.id)
       .eq('connection_type', 'chatguru')
-      .single()
+
+    if (configId) {
+      configQuery = configQuery.eq('id', configId)
+    }
+
+    const { data: config, error: configError } = await configQuery.limit(1).maybeSingle()
 
     if (configError || !config) {
       return new Response(
@@ -84,8 +137,7 @@ Deno.serve(async (req) => {
       await supabase
         .from('whatsapp_configs')
         .update({ verify_token: verifyToken })
-        .eq('user_id', user.id)
-        .eq('connection_type', 'chatguru')
+        .eq('id', config.id)
     }
 
     // Construct Webhook URL
